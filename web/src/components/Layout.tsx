@@ -6,9 +6,9 @@ import './Layout.css'
 function PackageIcon({ size = 18 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-      <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
-      <line x1="12" y1="22.08" x2="12" y2="12"/>
+      <polyline points="21 8 21 21 3 21 3 8"/>
+      <rect x="1" y="3" width="22" height="5"/>
+      <line x1="10" y1="12" x2="14" y2="12"/>
     </svg>
   )
 }
@@ -52,7 +52,10 @@ export default function Layout() {
       <nav className="nav">
         <Link to="/" className="nav-brand">
           <span className="nav-brand-icon"><PackageIcon /></span>
-          <span className="nav-brand-name">Aptify</span>
+          <span className="nav-brand-text">
+            <span className="nav-brand-name">Aptify</span>
+            <span className="nav-brand-tagline">Self-hosted APT, simplified</span>
+          </span>
         </Link>
 
         <div className="nav-right">

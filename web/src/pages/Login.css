@@ -36,11 +36,24 @@
   border: 1px solid rgba(124, 107, 255, 0.2);
 }
 
+.login-brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
 .login-brand-name {
   font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.03em;
   color: var(--text);
+  line-height: 1.2;
+}
+
+.login-brand-tagline {
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.01em;
 }
 
 .login-heading {

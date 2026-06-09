@@ -1,25 +1,21 @@
-# Aptify
+# Aptify — Self-hosted APT, simplified
 
-Aptify is a self-hosted APT repository manager with a beautiful web UI and robust security features. It allows you to easily manage your Debian packages, host custom APT repositories, and serve `.deb` packages securely.
+Aptify is a self-hosted APT repository manager with a clean web UI. Host, sign, and serve your own `.deb` packages without any external infrastructure.
 
 ## Features
 
-- **Web Dashboard**: An intuitive and modern UI to manage your repositories and packages.
-- **Automated Indexing**: Automatically generates `Packages`, `Release`, and `InRelease` files using GPG signatures.
-- **Secure by Default**:
-  - Timing attack mitigations on authentication routes.
-  - Strict input validation to prevent path traversal attacks.
-  - Secure memory footprint using size limits.
-  - Secure GPG key export without exposing tokens via URL parameters.
-- **Single Binary**: The entire backend and frontend are built into a single Go binary.
-- **Lightweight**: Uses SQLite for fast and simple database management without complex dependencies.
+- **Web Dashboard** — Manage repositories and packages from a modern browser UI.
+- **Automated Indexing** — Generates `Packages`, `Release`, and `InRelease` files automatically with GPG signatures on every upload.
+- **Secure by Default** — Timing-safe authentication, strict path traversal protection, upload size limits, and GPG key export without token leakage via URL parameters.
+- **Single Binary** — The entire backend and frontend ship as one self-contained Go binary.
+- **Flexible Storage** — SQLite out of the box; MySQL supported for larger deployments.
 
-## Installation & Deployment
+## Quick Start
 
-We provide a simple Docker Compose setup.
+**Requirements:** Docker and Docker Compose.
 
 1. Clone the repository.
-2. Create a `.env` file with your preferred admin credentials.
+2. Create a `.env` file:
    ```bash
    ADMIN_USERNAME=admin
    ADMIN_PASSWORD=mysecurepassword
@@ -27,39 +23,42 @@ We provide a simple Docker Compose setup.
    KEY_NAME="My APT Repo"
    KEY_EMAIL="apt@mycompany.com"
    ```
-3. Run with Docker Compose:
+3. Start the server:
    ```bash
    docker-compose up -d
    ```
-4. Access the web interface at `http://localhost:8080`.
+4. Open `http://localhost:8080` in your browser.
 
-## Database Configuration
+## Database
 
-Aptify uses SQLite by default, which requires zero configuration and stores data in the `DATA_DIR`.
-
-If you prefer to use **MySQL** for larger deployments, you can configure it via environment variables:
+Aptify defaults to SQLite — no configuration needed. For larger deployments, switch to MySQL:
 
 ```bash
 DB_TYPE=mysql
 DB_DSN=user:password@tcp(127.0.0.1:3306)/aptify?parseTime=true
 ```
 
-You can find a commented-out example of a MySQL service in the `docker-compose.yml` file.
-
-## Security
-
-Aptify prioritizes security. The admin dashboard is protected via a username and password login system backed by JWTs. Packages and filenames are strictly validated, and file uploads are protected against DoS attacks via upload size limits.
+A commented-out MySQL service example is included in `docker-compose.yml`.
 
 ## Development
 
 Requires Go 1.25+ and Node.js 20+.
 
 ```bash
-# Build the UI
+# Build the frontend
 cd web && npm run build
 
 # Run the backend
 go run ./cmd/server
 ```
 
-You can also run `make dev-backend` and `make dev-ui` for a better development experience.
+Or use the Makefile targets:
+
+```bash
+make dev-backend   # runs the Go server with live reload
+make dev-ui        # runs the Vite dev server
+```
+
+## Security
+
+Authentication is backed by JWTs. Package filenames and upload paths are strictly validated. All file uploads are protected against DoS via size limits. The GPG signing key is exported through an authenticated API endpoint, never via URL parameters.
