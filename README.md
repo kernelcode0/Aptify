@@ -59,6 +59,18 @@ make dev-backend   # runs the Go server with live reload
 make dev-ui        # runs the Vite dev server
 ```
 
+## Support
+
+If you find this software useful and it saves you time or money, consider supporting its development!
+
+<a href="https://www.buymeacoffee.com/kernelcode0" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
+
+### Why donate?
+Your support directly funds:
+- Server hosting and domain costs to keep the demo/project alive
+- Late-night coding sessions and ongoing maintenance
+- Keeping Aptify 100% free and open-source forever!
+
 ## Security
 
 Authentication is backed by JWTs. Package filenames and upload paths are strictly validated. All file uploads are protected against DoS via size limits. The GPG signing key is exported through an authenticated API endpoint, never via URL parameters.
