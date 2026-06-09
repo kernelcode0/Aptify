@@ -45,9 +45,24 @@ export default function Dashboard() {
           <p className="page-sub">Manage your APT package repositories</p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button className="ghost" onClick={() => {
-            const t = getToken();
-            window.location.href = `/api/system/gpg-key` + (t ? `?token=${t}` : '');
+          <button className="ghost" onClick={async () => {
+            try {
+              const res = await fetch('/api/system/gpg-key', {
+                headers: { 'Authorization': `Bearer ${getToken() || ''}` }
+              });
+              if (!res.ok) throw new Error('Failed to export GPG key');
+              const blob = await res.blob();
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = 'signing-key.asc';
+              document.body.appendChild(a);
+              a.click();
+              window.URL.revokeObjectURL(url);
+              document.body.removeChild(a);
+            } catch (err: any) {
+              alert(err.message);
+            }
           }}>Export GPG Key</button>
           <button className="primary" onClick={() => setShowNew(true)}>+ New Repository</button>
         </div>

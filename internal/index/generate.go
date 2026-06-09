@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kernelcode/apt-repository/internal/signing"
-	"github.com/kernelcode/apt-repository/internal/storage"
+	"github.com/kernelcode0/aptify/internal/signing"
+	"github.com/kernelcode0/aptify/internal/storage"
 )
 
 // Generator regenerates APT index files for a repository.

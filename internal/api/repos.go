@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/kernelcode/apt-repository/internal/storage"
+	"github.com/kernelcode0/aptify/internal/storage"
 )
 
 var codenameRe = regexp.MustCompile(`^[a-z][a-z0-9\-\.]{0,49}$`)
@@ -177,7 +177,7 @@ func (h *Handler) getSetup(w http.ResponseWriter, r *http.Request) {
 		"repoURL":   baseURL + "/repo/" + repo.Slug,
 		"codename":  repo.Codename,
 		"component": "main",
-		"addKey": "curl -fsSL " + baseURL + "/signing-key.asc | sudo gpg --dearmor -o /etc/apt/keyrings/" + repo.Slug + ".gpg",
+		"addKey":    "curl -fsSL " + baseURL + "/signing-key.asc | sudo gpg --dearmor -o /etc/apt/keyrings/" + repo.Slug + ".gpg",
 		"addSource": `echo "deb [arch=` + archStr + ` signed-by=/etc/apt/keyrings/` + repo.Slug + `.gpg] ` +
 			baseURL + `/repo/` + repo.Slug + ` ` + repo.Codename + ` main" | sudo tee /etc/apt/sources.list.d/` + repo.Slug + `.list`,
 		"update": "sudo apt update",

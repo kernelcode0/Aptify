@@ -6,12 +6,15 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/kernelcode/apt-repository/internal/deb"
-	"github.com/kernelcode/apt-repository/internal/storage"
+	"github.com/kernelcode0/aptify/internal/deb"
+	"github.com/kernelcode0/aptify/internal/storage"
 )
+
+var validPkgName = regexp.MustCompile(`^[a-z0-9\+\-\.]+$`)
 
 const maxUploadSize = 512 << 20 // 512 MiB
 
@@ -54,6 +57,11 @@ func (h *Handler) uploadPackage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filename := sanitizeFilename(header.Filename)
+
+	if !validPkgName.MatchString(info.Package) {
+		jsonError(w, "invalid package name in control file", http.StatusBadRequest)
+		return
+	}
 
 	// Save to pool.
 	if _, err := h.fs.SavePackage(repo.Slug, info.Package, filename, bytes.NewReader(data)); err != nil {

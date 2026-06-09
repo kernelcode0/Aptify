@@ -1,4 +1,4 @@
-module github.com/kernelcode/apt-repository
+module github.com/kernelcode0/aptify
 
 go 1.25.0
 

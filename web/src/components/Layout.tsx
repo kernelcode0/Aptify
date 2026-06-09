@@ -22,7 +22,7 @@ export default function Layout() {
       <nav className="nav">
         <Link to="/" className="nav-brand">
           <span className="nav-logo">📦</span>
-          <span>apt-repository</span>
+          <span>Aptify</span>
         </Link>
         <div className="nav-links">
           <Link to="/" className={loc.pathname === '/' ? 'active' : ''}>Repositories</Link>
