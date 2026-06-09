@@ -68,6 +68,7 @@ export interface PackageList {
 
 export const api = {
   checkAuth: () => req<{ authenticated: boolean }>('GET', '/api/auth/check'),
+  login: (username: string, password: string) => req<{ token: string }>('POST', '/api/auth/login', { username, password }),
   listRepos: () => req<Repo[]>('GET', '/api/repos'),
   createRepo: (slug: string, name: string, codename: string) =>
     req<Repo>('POST', '/api/repos', { slug, name, codename }),

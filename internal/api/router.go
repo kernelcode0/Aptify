@@ -1,13 +1,14 @@
 package api
 
 import (
-	"crypto/subtle"
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/kernelcode0/aptify/internal/index"
 	"github.com/kernelcode0/aptify/internal/signing"
 	"github.com/kernelcode0/aptify/internal/storage"
@@ -15,15 +16,15 @@ import (
 
 // Handler holds all API dependencies.
 type Handler struct {
-	db     *storage.DB
-	fs     *storage.FileStore
-	gen    *index.Generator
-	signer *signing.Signer
-	token  string
+	db        *storage.DB
+	fs        *storage.FileStore
+	gen       *index.Generator
+	signer    *signing.Signer
+	jwtSecret string
 }
 
-func New(db *storage.DB, fs *storage.FileStore, gen *index.Generator, signer *signing.Signer, adminToken string) *Handler {
-	return &Handler{db: db, fs: fs, gen: gen, signer: signer, token: adminToken}
+func New(db *storage.DB, fs *storage.FileStore, gen *index.Generator, signer *signing.Signer, jwtSecret string) *Handler {
+	return &Handler{db: db, fs: fs, gen: gen, signer: signer, jwtSecret: jwtSecret}
 }
 
 func (h *Handler) Router(spa http.Handler) http.Handler {
@@ -35,6 +36,9 @@ func (h *Handler) Router(spa http.Handler) http.Handler {
 	r.Get("/signing-key.asc", h.servePublicKey)
 	r.Get("/repo/{slug}/dists/*", h.serveRepoFile)
 	r.Get("/repo/{slug}/pool/*", h.serveRepoFile)
+
+	// Auth endpoint
+	r.Post("/api/auth/login", h.login)
 
 	// Admin API — protected.
 	r.Group(func(r chi.Router) {
@@ -59,11 +63,20 @@ func (h *Handler) Router(spa http.Handler) http.Handler {
 func (h *Handler) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		auth := r.Header.Get("Authorization")
-		token := strings.TrimPrefix(auth, "Bearer ")
-		if subtle.ConstantTimeCompare([]byte(token), []byte(h.token)) != 1 {
+		tokenStr := strings.TrimPrefix(auth, "Bearer ")
+
+		token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method")
+			}
+			return []byte(h.jwtSecret), nil
+		})
+
+		if err != nil || !token.Valid {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
+
 		next.ServeHTTP(w, r)
 	})
 }

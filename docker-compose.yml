@@ -8,11 +8,13 @@ services:
     environment:
       - DATA_DIR=/data
       - ADDR=:8080
-      # Set ADMIN_TOKEN to protect the admin API.
-      # Leave empty to run unprotected (development only).
-      - ADMIN_TOKEN=${ADMIN_TOKEN:-}
-      - KEY_NAME=${KEY_NAME:-APT Repository}
-      - KEY_EMAIL=${KEY_EMAIL:-apt@localhost}
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=admin123
+      # Optional: Set a consistent JWT secret to prevent session invalidation on server restart
+      # Generate the key using openssl rand -hex 32 or go run genkey.go
+      - JWT_SECRET=YOUR_GENERATED_STRING_HERE
+      - KEY_NAME="APT Repository"
+      - KEY_EMAIL="abc@example.com"
       # To use MySQL, uncomment the lines below and the db service:
       - DB_TYPE=mysql
       - DB_DSN=aptify:aptifypass@tcp(db:3306)/aptify?parseTime=true
@@ -28,7 +30,7 @@ services:
       - MYSQL_PASSWORD=aptifypass
       - MYSQL_ROOT_PASSWORD=rootpass
     ports:
-      - "3309:3306"
+      - "3306:3306"
     volumes:
       - mysql-data:/var/lib/mysql
     restart: unless-stopped

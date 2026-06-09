@@ -19,9 +19,11 @@ Aptify is a self-hosted APT repository manager with a beautiful web UI and robus
 We provide a simple Docker Compose setup.
 
 1. Clone the repository.
-2. Create a `.env` file with a strong `ADMIN_TOKEN`.
+2. Create a `.env` file with your preferred admin credentials.
    ```bash
-   ADMIN_TOKEN=your-secure-token
+   ADMIN_USERNAME=admin
+   ADMIN_PASSWORD=mysecurepassword
+   JWT_SECRET=your_super_secret_string
    KEY_NAME="My APT Repo"
    KEY_EMAIL="apt@mycompany.com"
    ```
@@ -46,7 +48,7 @@ You can find a commented-out example of a MySQL service in the `docker-compose.y
 
 ## Security
 
-Aptify prioritizes security. The admin dashboard is protected via Bearer tokens. Packages and filenames are strictly validated, and file uploads are protected against DoS attacks via upload size limits.
+Aptify prioritizes security. The admin dashboard is protected via a username and password login system backed by JWTs. Packages and filenames are strictly validated, and file uploads are protected against DoS attacks via upload size limits.
 
 ## Development
 

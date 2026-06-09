@@ -10,10 +10,18 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// DB wraps a SQLite connection.
+// DB wraps a database connection.
 type DB struct {
 	db     *sql.DB
 	dbType string
+}
+
+// User represents an administrator user.
+type User struct {
+	ID           string    `json:"id"`
+	Username     string    `json:"username"`
+	PasswordHash string    `json:"-"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // Repo represents a repository record.
@@ -65,8 +73,15 @@ func Open(dbType, dsn string) (*DB, error) {
 }
 
 func (d *DB) migrate() error {
-	var repoTable, pkgTable string
+	var repoTable, pkgTable, userTable string
 	if d.dbType == "mysql" {
+		userTable = `
+		CREATE TABLE IF NOT EXISTS users (
+			id            VARCHAR(36) PRIMARY KEY,
+			username      VARCHAR(255) UNIQUE NOT NULL,
+			password_hash VARCHAR(255) NOT NULL,
+			created_at    DATETIME NOT NULL
+		);`
 		repoTable = `
 		CREATE TABLE IF NOT EXISTS repos (
 			id          VARCHAR(36) PRIMARY KEY,
@@ -93,6 +108,13 @@ func (d *DB) migrate() error {
 			INDEX idx_packages_repo (repo_id)
 		);`
 	} else {
+		userTable = `
+		CREATE TABLE IF NOT EXISTS users (
+			id            TEXT PRIMARY KEY,
+			username      TEXT UNIQUE NOT NULL,
+			password_hash TEXT NOT NULL,
+			created_at    DATETIME NOT NULL
+		);`
 		repoTable = `
 		CREATE TABLE IF NOT EXISTS repos (
 			id          TEXT PRIMARY KEY,
@@ -118,6 +140,9 @@ func (d *DB) migrate() error {
 		);`
 	}
 
+	if _, err := d.db.Exec(userTable); err != nil {
+		return err
+	}
 	if _, err := d.db.Exec(repoTable); err != nil {
 		return err
 	}
@@ -130,6 +155,36 @@ func (d *DB) migrate() error {
 		}
 	}
 	return nil
+}
+
+// GetUserByUsername retrieves a user by their username.
+func (d *DB) GetUserByUsername(username string) (*User, error) {
+	u := &User{}
+	err := d.db.QueryRow(
+		`SELECT id, username, password_hash, created_at FROM users WHERE username=?`, username,
+	).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return u, err
+}
+
+// CreateUser inserts a new user.
+func (d *DB) CreateUser(username, passwordHash string) (*User, error) {
+	u := &User{
+		ID:           uuid.NewString(),
+		Username:     username,
+		PasswordHash: passwordHash,
+		CreatedAt:    time.Now().UTC(),
+	}
+	_, err := d.db.Exec(
+		`INSERT INTO users (id, username, password_hash, created_at) VALUES (?,?,?,?)`,
+		u.ID, u.Username, u.PasswordHash, u.CreatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create user: %w", err)
+	}
+	return u, nil
 }
 
 // CreateRepo inserts a new repo and returns it.
