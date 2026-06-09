@@ -6,12 +6,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	_ "github.com/go-sql-driver/mysql"
 	_ "modernc.org/sqlite"
 )
 
 // DB wraps a SQLite connection.
 type DB struct {
-	db *sql.DB
+	db     *sql.DB
+	dbType string
 }
 
 // Repo represents a repository record.
@@ -39,12 +41,23 @@ type Package struct {
 	UploadedAt  time.Time `json:"uploaded_at"`
 }
 
-func Open(path string) (*DB, error) {
-	db, err := sql.Open("sqlite", path+"?_journal=WAL&_busy_timeout=5000")
-	if err != nil {
-		return nil, fmt.Errorf("open sqlite: %w", err)
+func Open(dbType, dsn string) (*DB, error) {
+	if dbType == "" {
+		dbType = "sqlite"
 	}
-	d := &DB{db: db}
+	var db *sql.DB
+	var err error
+	if dbType == "sqlite" {
+		db, err = sql.Open("sqlite", dsn+"?_journal=WAL&_busy_timeout=5000")
+	} else if dbType == "mysql" {
+		db, err = sql.Open("mysql", dsn)
+	} else {
+		return nil, fmt.Errorf("unsupported dbType: %s", dbType)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("open db: %w", err)
+	}
+	d := &DB{db: db, dbType: dbType}
 	if err := d.migrate(); err != nil {
 		return nil, err
 	}
@@ -52,14 +65,43 @@ func Open(path string) (*DB, error) {
 }
 
 func (d *DB) migrate() error {
-	_, err := d.db.Exec(`
+	var repoTable, pkgTable string
+	if d.dbType == "mysql" {
+		repoTable = `
+		CREATE TABLE IF NOT EXISTS repos (
+			id          VARCHAR(36) PRIMARY KEY,
+			slug        VARCHAR(255) UNIQUE NOT NULL,
+			name        VARCHAR(255) NOT NULL,
+			codename    VARCHAR(255) NOT NULL DEFAULT 'stable',
+			created_at  DATETIME NOT NULL
+		);`
+		pkgTable = `
+		CREATE TABLE IF NOT EXISTS packages (
+			id           VARCHAR(36) PRIMARY KEY,
+			repo_id      VARCHAR(36) NOT NULL,
+			filename     VARCHAR(255) NOT NULL,
+			package      VARCHAR(255) NOT NULL,
+			version      VARCHAR(255) NOT NULL,
+			arch         VARCHAR(255) NOT NULL,
+			size         BIGINT NOT NULL,
+			sha256       VARCHAR(64) NOT NULL,
+			sha1         VARCHAR(40) NOT NULL,
+			md5          VARCHAR(32) NOT NULL,
+			control_json TEXT NOT NULL,
+			uploaded_at  DATETIME NOT NULL,
+			FOREIGN KEY (repo_id) REFERENCES repos(id) ON DELETE CASCADE,
+			INDEX idx_packages_repo (repo_id)
+		);`
+	} else {
+		repoTable = `
 		CREATE TABLE IF NOT EXISTS repos (
 			id          TEXT PRIMARY KEY,
 			slug        TEXT UNIQUE NOT NULL,
 			name        TEXT NOT NULL,
 			codename    TEXT NOT NULL DEFAULT 'stable',
 			created_at  DATETIME NOT NULL
-		);
+		);`
+		pkgTable = `
 		CREATE TABLE IF NOT EXISTS packages (
 			id           TEXT PRIMARY KEY,
 			repo_id      TEXT NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
@@ -73,10 +115,21 @@ func (d *DB) migrate() error {
 			md5          TEXT NOT NULL,
 			control_json TEXT NOT NULL DEFAULT '{}',
 			uploaded_at  DATETIME NOT NULL
-		);
-		CREATE INDEX IF NOT EXISTS idx_packages_repo ON packages(repo_id);
-	`)
-	return err
+		);`
+	}
+
+	if _, err := d.db.Exec(repoTable); err != nil {
+		return err
+	}
+	if _, err := d.db.Exec(pkgTable); err != nil {
+		return err
+	}
+	if d.dbType == "sqlite" {
+		if _, err := d.db.Exec(`CREATE INDEX IF NOT EXISTS idx_packages_repo ON packages(repo_id);`); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // CreateRepo inserts a new repo and returns it.

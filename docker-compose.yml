@@ -13,7 +13,26 @@ services:
       - ADMIN_TOKEN=${ADMIN_TOKEN:-}
       - KEY_NAME=${KEY_NAME:-APT Repository}
       - KEY_EMAIL=${KEY_EMAIL:-apt@localhost}
+      # To use MySQL, uncomment the lines below and the db service:
+      - DB_TYPE=mysql
+      - DB_DSN=aptify:aptifypass@tcp(db:3306)/aptify?parseTime=true
+    restart: unless-stopped
+    depends_on:
+      - db
+
+  db:
+    image: mysql:8
+    environment:
+      - MYSQL_DATABASE=aptify
+      - MYSQL_USER=aptify
+      - MYSQL_PASSWORD=aptifypass
+      - MYSQL_ROOT_PASSWORD=rootpass
+    ports:
+      - "3309:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
     restart: unless-stopped
 
 volumes:
   apt-data:
+  mysql-data:

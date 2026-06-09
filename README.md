@@ -31,6 +31,19 @@ We provide a simple Docker Compose setup.
    ```
 4. Access the web interface at `http://localhost:8080`.
 
+## Database Configuration
+
+Aptify uses SQLite by default, which requires zero configuration and stores data in the `DATA_DIR`.
+
+If you prefer to use **MySQL** for larger deployments, you can configure it via environment variables:
+
+```bash
+DB_TYPE=mysql
+DB_DSN=user:password@tcp(127.0.0.1:3306)/aptify?parseTime=true
+```
+
+You can find a commented-out example of a MySQL service in the `docker-compose.yml` file.
+
 ## Security
 
 Aptify prioritizes security. The admin dashboard is protected via Bearer tokens. Packages and filenames are strictly validated, and file uploads are protected against DoS attacks via upload size limits.
