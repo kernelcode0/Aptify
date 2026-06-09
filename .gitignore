@@ -1,0 +1,11 @@
+data/
+internal/web/dist/
+web/node_modules/
+web/dist/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+apt-repository
+.env
+data/
+server

@@ -1,0 +1,12 @@
+.git
+.gitignore
+apt-data
+node_modules
+dist
+web/node_modules
+web/dist
+tmp
+*.db
+*.db-shm
+*.db-wal
+.env

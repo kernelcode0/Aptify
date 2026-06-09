@@ -1,0 +1,19 @@
+services:
+  apt-repository:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - apt-data:/data
+    environment:
+      - DATA_DIR=/data
+      - ADDR=:8080
+      # Set ADMIN_TOKEN to protect the admin API.
+      # Leave empty to run unprotected (development only).
+      - ADMIN_TOKEN=${ADMIN_TOKEN:-}
+      - KEY_NAME=${KEY_NAME:-APT Repository}
+      - KEY_EMAIL=${KEY_EMAIL:-apt@localhost}
+    restart: unless-stopped
+
+volumes:
+  apt-data:
