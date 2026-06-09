@@ -27,6 +27,7 @@ func (h *Handler) uploadPackage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
+	// #nosec G120 -- bounded by MaxBytesReader above
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		jsonError(w, "failed to parse form: "+err.Error(), http.StatusBadRequest)
 		return
@@ -111,10 +112,10 @@ func (h *Handler) listPackages(w http.ResponseWriter, r *http.Request) {
 	page := 1
 	limit := 50
 	if p := r.URL.Query().Get("page"); p != "" {
-		fmt.Sscanf(p, "%d", &page)
+		_, _ = fmt.Sscanf(p, "%d", &page)
 	}
 	if l := r.URL.Query().Get("limit"); l != "" {
-		fmt.Sscanf(l, "%d", &limit)
+		_, _ = fmt.Sscanf(l, "%d", &limit)
 	}
 	if page < 1 {
 		page = 1
@@ -160,7 +161,7 @@ func (h *Handler) deletePackage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Remove file from disk.
-	h.fs.DeletePackageFile(repo.Slug, pkg.Package, pkg.Filename) //nolint:errcheck
+	_ = h.fs.DeletePackageFile(repo.Slug, pkg.Package, pkg.Filename)
 
 	if err := h.db.DeletePackage(pkgID); err != nil {
 		jsonError(w, "db error", http.StatusInternalServerError)

@@ -101,7 +101,7 @@ func (p *paddedReader) Read(buf []byte) (int, error) {
 	if err == io.EOF && p.size%2 != 0 {
 		// Discard the padding byte.
 		pad := make([]byte, 1)
-		p.lr.R.Read(pad) //nolint:errcheck
+		_, _ = p.lr.R.Read(pad)
 	}
 	return n, err
 }

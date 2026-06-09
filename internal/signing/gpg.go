@@ -46,7 +46,7 @@ func generate(keyPath, pubPath, name, email string) (*Signer, error) {
 	if err := entity.SerializePrivate(w, nil); err != nil {
 		return nil, err
 	}
-	w.Close()
+	_ = w.Close()
 	if err := os.WriteFile(keyPath, privBuf.Bytes(), 0600); err != nil {
 		return nil, fmt.Errorf("write private key: %w", err)
 	}
@@ -60,6 +60,7 @@ func generate(keyPath, pubPath, name, email string) (*Signer, error) {
 }
 
 func load(keyPath string) (*Signer, error) {
+	// #nosec G304 -- keyPath is generated internally by the application
 	f, err := os.Open(keyPath)
 	if err != nil {
 		return nil, err
@@ -115,7 +116,7 @@ func (s *Signer) PublicKeyArmored() ([]byte, error) {
 	if err := s.entity.Serialize(pw); err != nil {
 		return nil, err
 	}
-	pw.Close()
+	_ = pw.Close()
 	return buf.Bytes(), nil
 }
 
@@ -129,7 +130,7 @@ func (s *Signer) PrivateKeyArmored() ([]byte, error) {
 	if err := s.entity.SerializePrivate(pw, nil); err != nil {
 		return nil, err
 	}
-	pw.Close()
+	_ = pw.Close()
 	return buf.Bytes(), nil
 }
 
@@ -142,8 +143,9 @@ func writePublicKey(pubPath string, entity *pgp.Entity) error {
 	if err := entity.Serialize(pw); err != nil {
 		return err
 	}
-	pw.Close()
+	_ = pw.Close()
 	if pubPath != "" {
+		// #nosec G306 -- Public keys are meant to be world-readable
 		return os.WriteFile(pubPath, pubBuf.Bytes(), 0644)
 	}
 	return nil

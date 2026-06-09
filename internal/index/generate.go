@@ -3,8 +3,8 @@ package index
 import (
 	"bytes"
 	"compress/gzip"
-	"crypto/md5"
-	"crypto/sha1"
+	"crypto/md5"  // #nosec G501
+	"crypto/sha1" // #nosec G505
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -118,12 +118,12 @@ func buildRelease(repo *storage.Repo, packages, packagesGz []byte) []byte {
 
 	buf.WriteString("MD5Sum:\n")
 	for _, fe := range files {
-		s := md5.Sum(fe.data)
+		s := md5.Sum(fe.data) // #nosec G401 -- Required by APT format
 		fmt.Fprintf(&buf, " %s %d %s\n", hex.EncodeToString(s[:]), len(fe.data), fe.name)
 	}
 	buf.WriteString("SHA1:\n")
 	for _, fe := range files {
-		s := sha1.Sum(fe.data)
+		s := sha1.Sum(fe.data) // #nosec G401 -- Required by APT format
 		fmt.Fprintf(&buf, " %s %d %s\n", hex.EncodeToString(s[:]), len(fe.data), fe.name)
 	}
 	buf.WriteString("SHA256:\n")

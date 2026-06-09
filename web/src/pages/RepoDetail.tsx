@@ -5,6 +5,73 @@ import './RepoDetail.css'
 
 type Tab = 'packages' | 'setup'
 
+function ChevronIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="9 18 15 12 9 6"/>
+    </svg>
+  )
+}
+
+function EditIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+    </svg>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6"/>
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+      <path d="M10 11v6"/><path d="M14 11v6"/>
+      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+    </svg>
+  )
+}
+
+function UploadIcon() {
+  return (
+    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="16 16 12 12 8 16"/>
+      <line x1="12" y1="12" x2="12" y2="21"/>
+      <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+    </svg>
+  )
+}
+
+function XIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+    </svg>
+  )
+}
+
+function AlertIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      <circle cx="12" cy="12" r="10"/>
+      <line x1="12" y1="8" x2="12" y2="12"/>
+      <line x1="12" y1="16" x2="12.01" y2="16"/>
+    </svg>
+  )
+}
+
+function EmptyPackagesIcon() {
+  return (
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+      <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+      <line x1="12" y1="12" x2="12" y2="16"/>
+      <line x1="10" y1="14" x2="14" y2="14"/>
+    </svg>
+  )
+}
+
 export default function RepoDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -67,7 +134,7 @@ export default function RepoDetail() {
       const pkg = await api.uploadPackage(id, file)
       setPackages(p => [pkg, ...p].slice(0, 50))
       setTotalPkgs(t => t + 1)
-      if (tab === 'setup') setSetup(null) // invalidate setup to refresh arches
+      if (tab === 'setup') setSetup(null)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'upload failed')
     } finally {
@@ -115,7 +182,7 @@ export default function RepoDetail() {
       const updated = await api.updateRepo(id, editForm.name, editForm.codename)
       setRepo(updated)
       setEditing(false)
-      setSetup(null) // invalidate setup
+      setSetup(null)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'failed to save')
     } finally {
@@ -129,56 +196,95 @@ export default function RepoDetail() {
     setEditing(true)
   }
 
-  if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: '64px' }}><div className="spinner" /></div>
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '72px 0' }}>
+        <div className="spinner" />
+      </div>
+    )
+  }
 
   return (
     <div>
       <div className="detail-header">
-        <div>
-          <div className="breadcrumb"><Link to="/">Repositories</Link> / {repo?.slug}</div>
-          <h1>{repo?.name}</h1>
+        <div className="detail-header-left">
+          <div className="breadcrumb">
+            <Link to="/">Repositories</Link>
+            <ChevronIcon />
+            <span>{repo?.slug}</span>
+          </div>
+          <h1 className="detail-title">{repo?.name}</h1>
           <div className="detail-meta">
             <span className="tag">{repo?.codename}</span>
+            <span className="meta-dot" />
             <span className="muted-text">{totalPkgs} package{totalPkgs !== 1 ? 's' : ''}</span>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button className="ghost" onClick={openEdit}>Edit</button>
-          <button className="danger" onClick={handleDeleteRepo}>Delete Repo</button>
+        <div className="detail-actions">
+          <button className="ghost" onClick={openEdit}>
+            <EditIcon />
+            Edit
+          </button>
+          <button className="danger" onClick={handleDeleteRepo}>
+            <TrashIcon />
+            Delete
+          </button>
         </div>
       </div>
 
       {editing && (
-        <div className="card" style={{ marginBottom: 24 }}>
-          <h2>Edit Repository</h2>
-          <form onSubmit={handleEditSave} className="new-repo-form">
-            <div className="field">
-              <label>Name</label>
-              <input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} required />
+        <div className="overlay" onClick={e => { if (e.target === e.currentTarget) setEditing(false) }}>
+          <div className="modal">
+            <div className="modal-header">
+              <h2>Edit Repository</h2>
+              <button className="modal-close" onClick={() => setEditing(false)} aria-label="Close">
+                <XIcon />
+              </button>
             </div>
-            <div className="field">
-              <label>Codename</label>
-              <input value={editForm.codename} onChange={e => setEditForm(f => ({ ...f, codename: e.target.value }))} required />
-            </div>
-            <div className="form-actions">
-              <button type="submit" className="primary" disabled={saving}>{saving ? 'Saving...' : 'Save Changes'}</button>
-              <button type="button" className="ghost" onClick={() => setEditing(false)}>Cancel</button>
-            </div>
-          </form>
+            <form onSubmit={handleEditSave} className="form-stack">
+              <div className="field">
+                <label>Name</label>
+                <input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} required autoFocus />
+              </div>
+              <div className="field">
+                <label>Codename</label>
+                <input value={editForm.codename} onChange={e => setEditForm(f => ({ ...f, codename: e.target.value }))} required />
+              </div>
+              <div className="form-actions">
+                <button type="submit" className="primary" disabled={saving}>
+                  {saving
+                    ? <><div className="spinner" style={{ width: 14, height: 14, borderWidth: '2px' }} />Saving…</>
+                    : 'Save Changes'
+                  }
+                </button>
+                <button type="button" className="ghost" onClick={() => setEditing(false)}>Cancel</button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
-      {error && <div className="alert-error">{error}</div>}
+      {error && (
+        <div className="alert-error">
+          <AlertIcon />
+          {error}
+        </div>
+      )}
 
       <div className="tabs">
-        <button className={tab === 'packages' ? 'tab active' : 'tab'} onClick={() => setTab('packages')}>Packages</button>
-        <button className={tab === 'setup' ? 'tab active' : 'tab'} onClick={() => setTab('setup')}>Setup Instructions</button>
+        <button className={tab === 'packages' ? 'tab active' : 'tab'} onClick={() => setTab('packages')}>
+          Packages
+          {totalPkgs > 0 && <span className="tab-badge">{totalPkgs}</span>}
+        </button>
+        <button className={tab === 'setup' ? 'tab active' : 'tab'} onClick={() => setTab('setup')}>
+          Setup Instructions
+        </button>
       </div>
 
       {tab === 'packages' && (
         <div>
           <div
-            className={`upload-zone ${dragOver ? 'drag-over' : ''} ${uploading ? 'uploading' : ''}`}
+            className={`upload-zone${dragOver ? ' drag-over' : ''}${uploading ? ' uploading' : ''}`}
             onDragOver={e => { e.preventDefault(); setDragOver(true) }}
             onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop}
@@ -186,16 +292,30 @@ export default function RepoDetail() {
           >
             <input ref={inputRef} type="file" accept=".deb" style={{ display: 'none' }}
               onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f) }} />
-            {uploading
-              ? <><div className="spinner" /><span>Uploading and indexing…</span></>
-              : <><span className="upload-icon">⬆️</span><span>Drop a <code>.deb</code> file here, or click to browse</span></>
-            }
+            {uploading ? (
+              <div className="upload-uploading">
+                <div className="spinner" />
+                <div>
+                  <div className="upload-title">Uploading and indexing…</div>
+                  <div className="upload-sub">This may take a moment</div>
+                </div>
+              </div>
+            ) : (
+              <div className="upload-idle">
+                <span className="upload-icon"><UploadIcon /></span>
+                <div>
+                  <div className="upload-title">Drop a <code>.deb</code> file here</div>
+                  <div className="upload-sub">or click to browse your files</div>
+                </div>
+              </div>
+            )}
           </div>
 
           {packages.length === 0 ? (
             <div className="empty-state">
+              <div className="empty-icon"><EmptyPackagesIcon /></div>
               <h3>No packages yet</h3>
-              <p>Upload a .deb file to get started.</p>
+              <p>Upload a .deb file to add your first package.</p>
             </div>
           ) : (
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -207,28 +327,32 @@ export default function RepoDetail() {
                     <th>Arch</th>
                     <th>Size</th>
                     <th>Uploaded</th>
-                    <th></th>
+                    <th style={{ width: 60 }}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {packages.map(p => (
                     <tr key={p.id}>
-                      <td><strong>{p.package}</strong></td>
-                      <td><code>{p.version}</code></td>
+                      <td><span className="pkg-name">{p.package}</span></td>
+                      <td><code className="pkg-version">{p.version}</code></td>
                       <td><span className="tag">{p.arch}</span></td>
                       <td className="muted-text">{formatBytes(p.size)}</td>
                       <td className="muted-text">{formatDate(p.uploaded_at)}</td>
-                      <td><button className="danger" style={{ fontSize: '11px', padding: '3px 10px' }} onClick={() => handleDelete(p)}>Remove</button></td>
+                      <td>
+                        <button className="danger icon-btn" onClick={() => handleDelete(p)} title="Remove package">
+                          <TrashIcon />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              
+
               {totalPkgs > 50 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px', borderTop: '1px solid var(--border)' }}>
-                  <button className="ghost" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Previous</button>
-                  <span className="muted-text" style={{ fontSize: 14 }}>Page {page} of {Math.ceil(totalPkgs / 50)}</span>
-                  <button className="ghost" disabled={page >= Math.ceil(totalPkgs / 50)} onClick={() => setPage(p => p + 1)}>Next</button>
+                <div className="pagination">
+                  <button className="ghost" disabled={page === 1} onClick={() => setPage(p => p - 1)}>← Previous</button>
+                  <span className="muted-text">Page {page} of {Math.ceil(totalPkgs / 50)}</span>
+                  <button className="ghost" disabled={page >= Math.ceil(totalPkgs / 50)} onClick={() => setPage(p => p + 1)}>Next →</button>
                 </div>
               )}
             </div>
@@ -239,6 +363,11 @@ export default function RepoDetail() {
       {tab === 'setup' && setup && (
         <SetupInstructions setup={setup} slug={repo?.slug ?? ''} packages={packages} />
       )}
+      {tab === 'setup' && !setup && (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '48px 0' }}>
+          <div className="spinner" />
+        </div>
+      )}
     </div>
   )
 }
@@ -247,7 +376,7 @@ function SetupInstructions({ setup, slug, packages }: { setup: SetupInfo; slug: 
   const examplePkg = packages.length > 0 ? packages[0].package : '<package-name>'
   return (
     <div className="setup">
-      <p className="setup-intro">Add this repository to your system and install packages:</p>
+      <p className="setup-intro">Add this repository to your system and install packages.</p>
 
       <SetupStep n={1} title="Import the signing key">
         <CopyBlock code={setup.addKey} />
@@ -257,7 +386,7 @@ function SetupInstructions({ setup, slug, packages }: { setup: SetupInfo; slug: 
         <CopyBlock code={setup.addSource} />
       </SetupStep>
 
-      <SetupStep n={3} title="Update apt">
+      <SetupStep n={3} title="Update package index">
         <CopyBlock code={setup.update} />
       </SetupStep>
 
@@ -265,7 +394,8 @@ function SetupInstructions({ setup, slug, packages }: { setup: SetupInfo; slug: 
         <CopyBlock code={`sudo apt install ${examplePkg}`} />
       </SetupStep>
 
-      <div className="setup-info card" style={{ marginTop: 24 }}>
+      <div className="setup-details card">
+        <div className="setup-details-title">Repository details</div>
         <table>
           <tbody>
             <tr><td className="info-label">Repository URL</td><td><code>{setup.repoURL}</code></td></tr>
@@ -276,10 +406,8 @@ function SetupInstructions({ setup, slug, packages }: { setup: SetupInfo; slug: 
         </table>
       </div>
 
-      <div className="setup-sources card" style={{ marginTop: 16 }}>
-        <p style={{ marginBottom: 8, fontSize: 12, color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          /etc/apt/sources.list.d/{slug}.list
-        </p>
+      <div className="setup-sources card">
+        <div className="setup-sources-label">/etc/apt/sources.list.d/{slug}.list</div>
         <pre>{setup.addSource.split('"')[1]}</pre>
       </div>
     </div>

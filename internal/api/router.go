@@ -88,7 +88,7 @@ func (h *Handler) servePublicKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/pgp-keys")
-	w.Write(pubKey)
+	_, _ = w.Write(pubKey)
 }
 
 // serveRepoFile serves static files from the repo's data directory.

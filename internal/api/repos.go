@@ -144,7 +144,7 @@ func (h *Handler) updateRepo(w http.ResponseWriter, r *http.Request) {
 	if codenameChanged {
 		// Regenerate index in new path
 		packages, _ := h.db.ListPackages(repo.ID, 0, 0)
-		h.gen.Regenerate(repo, packages) //nolint:errcheck
+		_ = h.gen.Regenerate(repo, packages)
 	}
 
 	jsonOK(w, repo, http.StatusOK)

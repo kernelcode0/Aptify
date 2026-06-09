@@ -12,5 +12,5 @@ func (h *Handler) exportGPGKey(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/pgp-keys")
 	w.Header().Set("Content-Disposition", `attachment; filename="private-key.asc"`)
-	w.Write(privKey) //nolint:errcheck
+	_, _ = w.Write(privKey)
 }

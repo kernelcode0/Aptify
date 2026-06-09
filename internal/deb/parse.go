@@ -6,8 +6,8 @@ import (
 	"bytes"
 	"compress/bzip2"
 	"compress/gzip"
-	"crypto/md5"
-	"crypto/sha1"
+	"crypto/md5"  // #nosec G501
+	"crypto/sha1" // #nosec G505
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -57,8 +57,8 @@ func Parse(r io.Reader) (*Info, error) {
 
 	// Compute checksums.
 	s256 := sha256.Sum256(raw)
-	s1 := sha1.Sum(raw)
-	m5 := md5.Sum(raw)
+	s1 := sha1.Sum(raw) // #nosec G401 -- Required by APT format
+	m5 := md5.Sum(raw)  // #nosec G401 -- Required by APT format
 	info.SHA256 = hex.EncodeToString(s256[:])
 	info.SHA1 = hex.EncodeToString(s1[:])
 	info.MD5 = hex.EncodeToString(m5[:])
@@ -94,10 +94,10 @@ func extractControl(r io.ReaderAt) (string, error) {
 		}
 		if strings.HasPrefix(name, "control.tar") {
 			ctrl, err := extractControlFromTar(name, rc)
-			rc.Close()
+			_ = rc.Close()
 			return ctrl, err
 		}
-		rc.Close()
+		_ = rc.Close()
 	}
 	return "", fmt.Errorf("control.tar not found in .deb archive")
 }

@@ -61,7 +61,7 @@ func (fs *FileStore) InitRepo(slug, codename string) error {
 		fs.IndexDir(slug, codename),
 	}
 	for _, d := range dirs {
-		if err := os.MkdirAll(d, 0755); err != nil {
+		if err := os.MkdirAll(d, 0750); err != nil {
 			return err
 		}
 	}
@@ -71,11 +71,13 @@ func (fs *FileStore) InitRepo(slug, codename string) error {
 // SavePackage writes the .deb bytes to the pool directory, creating dirs as needed.
 func (fs *FileStore) SavePackage(slug, pkgName, filename string, r io.Reader) (string, error) {
 	dir := fs.PoolDir(slug, pkgName)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0750); err != nil {
 		return "", err
 	}
+	filename = filepath.Base(filepath.Clean(filename))
 	dest := filepath.Join(dir, filename)
-	f, err := os.Create(dest)
+	// #nosec G304 -- dest is bounded by dir and filename is sanitized
+	f, err := os.OpenFile(dest, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return "", err
 	}
@@ -98,6 +100,7 @@ func (fs *FileStore) PoolRelPath(slug, pkgName, filename string) string {
 
 // DeletePackageFile removes the .deb file from disk.
 func (fs *FileStore) DeletePackageFile(slug, pkgName, filename string) error {
+	filename = filepath.Base(filepath.Clean(filename))
 	path := filepath.Join(fs.PoolDir(slug, pkgName), filename)
 	return os.Remove(path)
 }
@@ -115,11 +118,11 @@ func (fs *FileStore) PubKeyPath() string {
 // WriteFile atomically writes data to path.
 func WriteFile(path string, data []byte) error {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0750); err != nil {
 		return err
 	}
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0644); err != nil {
+	if err := os.WriteFile(tmp, data, 0600); err != nil {
 		return err
 	}
 	return os.Rename(tmp, path)
