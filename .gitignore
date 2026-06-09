@@ -9,3 +9,4 @@ apt-repository
 .env
 data/
 server
+aptify
