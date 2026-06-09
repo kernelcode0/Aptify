@@ -1,12 +1,20 @@
-data/
-internal/web/dist/
+# Dependencies
 web/node_modules/
+server
+
+# Build outputs
+internal/web/dist/
 web/dist/
+aptify
+
+# Data volumes
+data/
+apt-data/
+mysql-data/
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
 apt-repository
+
+# Environment
 .env
-data/
-server
-aptify
