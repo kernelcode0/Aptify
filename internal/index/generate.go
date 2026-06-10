@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -33,12 +34,15 @@ func (g *Generator) Regenerate(repo *storage.Repo, packages []storage.Package) e
 		return fmt.Errorf("gzip Packages: %w", err)
 	}
 
-	indexDir := g.fs.IndexDir(repo.Slug, repo.Codename)
-	if err := storage.WriteFile(indexDir+"/Packages", pkgContent); err != nil {
-		return err
-	}
-	if err := storage.WriteFile(indexDir+"/Packages.gz", pkgGz); err != nil {
-		return err
+	archs := []string{"amd64", "arm64", "all"}
+	for _, arch := range archs {
+		indexDir := filepath.Join(g.fs.DistsDir(repo.Slug, repo.Codename), "main", "binary-"+arch)
+		if err := storage.WriteFile(indexDir+"/Packages", pkgContent); err != nil {
+			return err
+		}
+		if err := storage.WriteFile(indexDir+"/Packages.gz", pkgGz); err != nil {
+			return err
+		}
 	}
 
 	releaseContent := buildRelease(repo, pkgContent, pkgGz)
@@ -114,6 +118,10 @@ func buildRelease(repo *storage.Repo, packages, packagesGz []byte) []byte {
 	files := []fileEntry{
 		{"main/binary-amd64/Packages", packages},
 		{"main/binary-amd64/Packages.gz", packagesGz},
+		{"main/binary-arm64/Packages", packages},
+		{"main/binary-arm64/Packages.gz", packagesGz},
+		{"main/binary-all/Packages", packages},
+		{"main/binary-all/Packages.gz", packagesGz},
 	}
 
 	buf.WriteString("MD5Sum:\n")

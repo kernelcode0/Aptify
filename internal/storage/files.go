@@ -58,7 +58,9 @@ func (fs *FileStore) IndexDir(slug, codename string) string {
 func (fs *FileStore) InitRepo(slug, codename string) error {
 	dirs := []string{
 		fs.PoolDir(slug, "placeholder"),
-		fs.IndexDir(slug, codename),
+		filepath.Join(fs.DistsDir(slug, codename), "main", "binary-amd64"),
+		filepath.Join(fs.DistsDir(slug, codename), "main", "binary-arm64"),
+		filepath.Join(fs.DistsDir(slug, codename), "main", "binary-all"),
 	}
 	for _, d := range dirs {
 		if err := os.MkdirAll(d, 0750); err != nil {
