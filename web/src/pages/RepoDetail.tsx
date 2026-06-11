@@ -429,10 +429,30 @@ function SetupStep({ n, title, children }: { n: number; title: string; children:
 function CopyBlock({ code }: { code: string }) {
   const [copied, setCopied] = useState(false)
   const copy = () => {
-    navigator.clipboard.writeText(code).then(() => {
+    const handleSuccess = () => {
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
-    })
+    }
+
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(code).then(handleSuccess).catch(err => console.error("Failed to copy", err))
+    } else {
+      const textArea = document.createElement("textarea")
+      textArea.value = code
+      textArea.style.position = "fixed"
+      textArea.style.left = "-999999px"
+      textArea.style.top = "-999999px"
+      document.body.appendChild(textArea)
+      textArea.focus()
+      textArea.select()
+      try {
+        document.execCommand('copy')
+        handleSuccess()
+      } catch (error) {
+        console.error('Fallback copy failed', error)
+      }
+      textArea.remove()
+    }
   }
   return (
     <div className="copy-block">
