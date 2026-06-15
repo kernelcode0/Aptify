@@ -93,6 +93,10 @@ func (h *Handler) deleteRepo(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "db error", http.StatusInternalServerError)
 		return
 	}
+	if err := h.fs.DeleteRepoDir(repo.Slug); err != nil {
+		jsonError(w, "repo deleted but file cleanup failed", http.StatusInternalServerError)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -143,8 +147,10 @@ func (h *Handler) updateRepo(w http.ResponseWriter, r *http.Request) {
 
 	if codenameChanged {
 		// Regenerate index in new path
-		packages, _ := h.db.ListPackages(repo.ID, 0, 0)
-		_ = h.gen.Regenerate(repo, packages)
+		if err := h.regenerateRepoIndex(repo); err != nil {
+			jsonError(w, "index regenerate error", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	jsonOK(w, repo, http.StatusOK)

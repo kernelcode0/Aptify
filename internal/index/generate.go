@@ -22,30 +22,40 @@ type Generator struct {
 	signer *signing.Signer
 }
 
+type archIndex struct {
+	arch string
+	pkg  []byte
+	gz   []byte
+}
+
 func New(fs *storage.FileStore, signer *signing.Signer) *Generator {
 	return &Generator{fs: fs, signer: signer}
 }
 
 // Regenerate rebuilds Packages, Packages.gz, Release, and InRelease for the given repo.
 func (g *Generator) Regenerate(repo *storage.Repo, packages []storage.Package) error {
-	pkgContent := buildPackages(repo.Slug, packages)
-	pkgGz, err := gzipBytes(pkgContent)
-	if err != nil {
-		return fmt.Errorf("gzip Packages: %w", err)
-	}
-
 	archs := []string{"amd64", "arm64", "all"}
+	indexes := make([]archIndex, 0, len(archs))
 	for _, arch := range archs {
-		indexDir := filepath.Join(g.fs.DistsDir(repo.Slug, repo.Codename), "main", "binary-"+arch)
-		if err := storage.WriteFile(indexDir+"/Packages", pkgContent); err != nil {
+		pkgContent := buildPackages(repo.Slug, packagesForArch(packages, arch))
+		pkgGz, err := gzipBytes(pkgContent)
+		if err != nil {
+			return fmt.Errorf("gzip Packages for %s: %w", arch, err)
+		}
+		indexes = append(indexes, archIndex{arch: arch, pkg: pkgContent, gz: pkgGz})
+	}
+
+	for _, idx := range indexes {
+		indexDir := filepath.Join(g.fs.DistsDir(repo.Slug, repo.Codename), "main", "binary-"+idx.arch)
+		if err := storage.WriteFile(indexDir+"/Packages", idx.pkg); err != nil {
 			return err
 		}
-		if err := storage.WriteFile(indexDir+"/Packages.gz", pkgGz); err != nil {
+		if err := storage.WriteFile(indexDir+"/Packages.gz", idx.gz); err != nil {
 			return err
 		}
 	}
 
-	releaseContent := buildRelease(repo, pkgContent, pkgGz)
+	releaseContent := buildRelease(repo, indexes)
 	if err := storage.WriteFile(g.fs.DistsDir(repo.Slug, repo.Codename)+"/Release", releaseContent); err != nil {
 		return err
 	}
@@ -68,6 +78,16 @@ func (g *Generator) Regenerate(repo *storage.Repo, packages []storage.Package) e
 		}
 	}
 	return nil
+}
+
+func packagesForArch(packages []storage.Package, arch string) []storage.Package {
+	filtered := make([]storage.Package, 0, len(packages))
+	for _, p := range packages {
+		if p.Arch == arch || p.Arch == "all" {
+			filtered = append(filtered, p)
+		}
+	}
+	return filtered
 }
 
 // buildPackages generates the Packages index content.
@@ -99,8 +119,21 @@ func poolRelPath(slug, pkgName, filename string) string {
 	return fmt.Sprintf("pool/main/%s/%s/%s", letter, pkgName, filename)
 }
 
+type releaseFile struct {
+	name string
+	data []byte
+}
+
+func (idx archIndex) releaseFiles() []releaseFile {
+	base := "main/binary-" + idx.arch
+	return []releaseFile{
+		{name: base + "/Packages", data: idx.pkg},
+		{name: base + "/Packages.gz", data: idx.gz},
+	}
+}
+
 // buildRelease generates the Release file.
-func buildRelease(repo *storage.Repo, packages, packagesGz []byte) []byte {
+func buildRelease(repo *storage.Repo, indexes []archIndex) []byte {
 	var buf bytes.Buffer
 	fmt.Fprintf(&buf, "Origin: %s\n", repo.Name)
 	fmt.Fprintf(&buf, "Label: %s\n", repo.Name)
@@ -111,17 +144,9 @@ func buildRelease(repo *storage.Repo, packages, packagesGz []byte) []byte {
 	fmt.Fprintf(&buf, "Components: main\n")
 	fmt.Fprintf(&buf, "Description: %s APT repository\n", repo.Name)
 
-	type fileEntry struct {
-		name string
-		data []byte
-	}
-	files := []fileEntry{
-		{"main/binary-amd64/Packages", packages},
-		{"main/binary-amd64/Packages.gz", packagesGz},
-		{"main/binary-arm64/Packages", packages},
-		{"main/binary-arm64/Packages.gz", packagesGz},
-		{"main/binary-all/Packages", packages},
-		{"main/binary-all/Packages.gz", packagesGz},
+	var files []releaseFile
+	for _, idx := range indexes {
+		files = append(files, idx.releaseFiles()...)
 	}
 
 	buf.WriteString("MD5Sum:\n")

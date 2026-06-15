@@ -72,11 +72,6 @@ export default function Layout() {
       <main className="main">
         <Outlet />
       </main>
-      <footer className="footer">
-        <a href="https://www.buymeacoffee.com/kernelcode0" target="_blank" rel="noopener noreferrer" className="bmc-button">
-          <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" />
-        </a>
-      </footer>
     </div>
   )
 }

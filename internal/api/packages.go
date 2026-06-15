@@ -2,9 +2,11 @@ package api
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -65,9 +67,15 @@ func (h *Handler) uploadPackage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Save to pool.
-	if _, err := h.fs.SavePackage(repo.Slug, info.Package, filename, bytes.NewReader(data)); err != nil {
+	savedPath, err := h.fs.SavePackage(repo.Slug, info.Package, filename, bytes.NewReader(data))
+	if err != nil {
 		jsonError(w, "storage error", http.StatusInternalServerError)
 		return
+	}
+	cleanupSavedFile := func() {
+		if savedPath != "" {
+			_ = os.Remove(savedPath)
+		}
 	}
 
 	pkg := &storage.Package{
@@ -83,17 +91,15 @@ func (h *Handler) uploadPackage(w http.ResponseWriter, r *http.Request) {
 		ControlJSON: cleanControl(info.ControlBlock),
 	}
 	if err := h.db.AddPackage(pkg); err != nil {
+		cleanupSavedFile()
 		jsonError(w, "db error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Regenerate index.
-	packages, err := h.db.ListPackages(repo.ID, 0, 0)
-	if err != nil {
-		jsonError(w, "index error", http.StatusInternalServerError)
-		return
-	}
-	if err := h.gen.Regenerate(repo, packages); err != nil {
+	if err := h.regenerateRepoIndex(repo); err != nil {
+		_ = h.db.DeletePackage(pkg.ID)
+		cleanupSavedFile()
+		_ = h.regenerateRepoIndex(repo)
 		jsonError(w, "index regenerate error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -160,22 +166,17 @@ func (h *Handler) deletePackage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Remove file from disk.
-	_ = h.fs.DeletePackageFile(repo.Slug, pkg.Package, pkg.Filename)
-
 	if err := h.db.DeletePackage(pkgID); err != nil {
 		jsonError(w, "db error", http.StatusInternalServerError)
 		return
 	}
 
-	// Regenerate index without the deleted package.
-	packages, err := h.db.ListPackages(repoID, 0, 0)
-	if err != nil {
-		jsonError(w, "index error", http.StatusInternalServerError)
+	if err := h.regenerateRepoIndex(repo); err != nil {
+		jsonError(w, "index regenerate error", http.StatusInternalServerError)
 		return
 	}
-	if err := h.gen.Regenerate(repo, packages); err != nil {
-		jsonError(w, "index regenerate error", http.StatusInternalServerError)
+	if err := h.fs.DeletePackageFile(repo.Slug, pkg.Package, pkg.Filename); err != nil && !errors.Is(err, os.ErrNotExist) {
+		jsonError(w, "package deleted but file cleanup failed", http.StatusInternalServerError)
 		return
 	}
 

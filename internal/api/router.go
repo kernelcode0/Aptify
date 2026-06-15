@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -21,6 +22,7 @@ type Handler struct {
 	gen       *index.Generator
 	signer    *signing.Signer
 	jwtSecret string
+	indexMu   sync.Mutex
 }
 
 func New(db *storage.DB, fs *storage.FileStore, gen *index.Generator, signer *signing.Signer, jwtSecret string) *Handler {
@@ -79,6 +81,17 @@ func (h *Handler) authMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (h *Handler) regenerateRepoIndex(repo *storage.Repo) error {
+	h.indexMu.Lock()
+	defer h.indexMu.Unlock()
+
+	packages, err := h.db.ListPackages(repo.ID, 0, 0)
+	if err != nil {
+		return err
+	}
+	return h.gen.Regenerate(repo, packages)
 }
 
 func (h *Handler) servePublicKey(w http.ResponseWriter, r *http.Request) {

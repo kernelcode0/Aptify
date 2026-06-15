@@ -117,7 +117,7 @@ export default function RepoDetail() {
     } catch {}
   }
 
-  useEffect(() => { loadRepo() }, [id])
+  useEffect(() => { loadRepo() }, [id, page])
 
   useEffect(() => {
     if (tab === 'setup') loadSetup()
@@ -216,6 +216,7 @@ export default function RepoDetail() {
           <h1 className="detail-title">{repo?.name}</h1>
           <div className="detail-meta">
             <span className="tag">{repo?.codename}</span>
+            <span className="tag subtle">/{repo?.slug}</span>
             <span className="meta-dot" />
             <span className="muted-text">{totalPkgs} package{totalPkgs !== 1 ? 's' : ''}</span>
           </div>
@@ -318,7 +319,7 @@ export default function RepoDetail() {
               <p>Upload a .deb file to add your first package.</p>
             </div>
           ) : (
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            <div className="package-table card">
               <table>
                 <thead>
                   <tr>

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/google/uuid"
 	_ "modernc.org/sqlite"
 )
 
@@ -64,6 +64,13 @@ func Open(dbType, dsn string) (*DB, error) {
 	}
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
+	}
+	if dbType == "sqlite" {
+		db.SetMaxOpenConns(1)
+		if _, err := db.Exec(`PRAGMA foreign_keys = ON;`); err != nil {
+			_ = db.Close()
+			return nil, fmt.Errorf("enable sqlite foreign keys: %w", err)
+		}
 	}
 	d := &DB{db: db, dbType: dbType}
 	if err := d.migrate(); err != nil {
@@ -295,7 +302,7 @@ func (d *DB) AddPackage(p *Package) error {
 func (d *DB) ListPackages(repoID string, limit, offset int) ([]Package, error) {
 	query := `SELECT id, repo_id, filename, package, version, arch, size, sha256, sha1, md5, control_json, uploaded_at
 		 FROM packages WHERE repo_id=? ORDER BY uploaded_at DESC`
-	
+
 	var rows *sql.Rows
 	var err error
 	if limit > 0 {

@@ -107,6 +107,11 @@ func (fs *FileStore) DeletePackageFile(slug, pkgName, filename string) error {
 	return os.Remove(path)
 }
 
+// DeleteRepoDir removes all on-disk files for a repository.
+func (fs *FileStore) DeleteRepoDir(slug string) error {
+	return os.RemoveAll(fs.RepoDir(slug))
+}
+
 // KeyPath returns the path to the private GPG key.
 func (fs *FileStore) KeyPath() string {
 	return filepath.Join(fs.DataDir, "keys", "signing.pgp")

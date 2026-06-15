@@ -115,8 +115,9 @@ export default function Dashboard() {
     <div>
       <div className="page-header">
         <div>
+          <div className="page-kicker">Control plane</div>
           <h1 className="page-title">Repositories</h1>
-          <p className="page-sub">Manage your APT package repositories</p>
+          <p className="page-sub">{repos.length} active repositor{repos.length === 1 ? 'y' : 'ies'}</p>
         </div>
         <div className="page-actions">
           <button className="ghost" onClick={handleExportKey}>
@@ -202,6 +203,21 @@ export default function Dashboard() {
           <p>Create your first repository to get started.</p>
         </div>
       ) : (
+        <>
+        <div className="dashboard-strip">
+          <div>
+            <span className="strip-label">Repositories</span>
+            <strong>{repos.length}</strong>
+          </div>
+          <div>
+            <span className="strip-label">Default suite</span>
+            <strong>{repos.find(r => r.codename === 'stable') ? 'stable' : repos[0]?.codename ?? 'none'}</strong>
+          </div>
+          <div>
+            <span className="strip-label">Signing key</span>
+            <strong>available</strong>
+          </div>
+        </div>
         <div className="repo-grid">
           {repos.map(r => (
             <Link key={r.id} to={`/repos/${r.id}`} className="repo-card card">
@@ -219,6 +235,7 @@ export default function Dashboard() {
             </Link>
           ))}
         </div>
+        </>
       )}
     </div>
   )
