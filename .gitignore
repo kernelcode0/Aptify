@@ -1,6 +1,6 @@
 # Dependencies
 web/node_modules/
-server
+/server
 
 # Build outputs
 internal/web/dist/
