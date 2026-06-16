@@ -74,3 +74,7 @@ Your support directly funds:
 ## Security
 
 Authentication is backed by JWTs. Package filenames and upload paths are strictly validated. All file uploads are protected against DoS via size limits. The GPG signing key is exported through an authenticated API endpoint, never via URL parameters.
+
+## Contact
+
+For inquiries, support, or security reports, please contact: [aptify@kernelcode.de](mailto:aptify@kernelcode.de)

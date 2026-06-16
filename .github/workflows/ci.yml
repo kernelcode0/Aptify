@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25'
+        cache: true
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: './web/package-lock.json'
+
+    - name: Build Frontend
+      working-directory: ./web
+      run: |
+        npm ci
+        npm run build
+
+    - name: Test Go Backend
+      run: go test -v ./...
+
+    - name: Build Go Backend
+      run: go build -v -o aptify ./cmd/server
