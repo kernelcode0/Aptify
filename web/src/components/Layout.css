@@ -40,11 +40,13 @@
   justify-content: center;
   width: 34px;
   height: 34px;
-  background: linear-gradient(135deg, rgba(45, 212, 191, 0.18), rgba(245, 158, 11, 0.12));
-  border: 1px solid rgba(45, 212, 191, 0.2);
-  border-radius: 8px;
-  color: var(--accent-hover);
   flex-shrink: 0;
+}
+
+.nav-brand-svg {
+  display: block;
+  width: 34px;
+  height: 34px;
 }
 
 .nav-brand-text {

@@ -3,12 +3,15 @@ import { useEffect, useState } from 'react'
 import { api, setToken } from '../api'
 import './Layout.css'
 
-function PackageIcon({ size = 18 }: { size?: number }) {
+function AptifyMark() {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="21 8 21 21 3 21 3 8"/>
-      <rect x="1" y="3" width="22" height="5"/>
-      <line x1="10" y1="12" x2="14" y2="12"/>
+    <svg className="nav-brand-svg" viewBox="0 0 64 64" role="img" aria-label="Aptify">
+      <rect width="64" height="64" rx="14" fill="#0f1115" />
+      <rect x="9" y="9" width="46" height="46" rx="10" fill="#191d25" stroke="#303744" strokeWidth="2" />
+      <path d="M18 24h28v20H18z" fill="#202631" stroke="#5eead4" strokeWidth="3" strokeLinejoin="round" />
+      <path d="M16 18h32v9H16z" fill="#14b8a6" stroke="#5eead4" strokeWidth="3" strokeLinejoin="round" />
+      <path d="M27 34h10" stroke="#f59e0b" strokeWidth="4" strokeLinecap="round" />
+      <path d="M23 18l4-6h10l4 6" fill="none" stroke="#f59e0b" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
@@ -51,7 +54,7 @@ export default function Layout() {
     <div className="layout">
       <nav className="nav">
         <Link to="/" className="nav-brand">
-          <span className="nav-brand-icon"><PackageIcon /></span>
+          <span className="nav-brand-icon"><AptifyMark /></span>
           <span className="nav-brand-text">
             <span className="nav-brand-name">Aptify</span>
             <span className="nav-brand-tagline">Self-hosted APT, simplified</span>
