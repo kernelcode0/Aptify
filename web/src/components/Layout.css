@@ -143,6 +143,15 @@
   margin: 0 auto;
 }
 
+.star-prompt { position:relative; display:flex; align-items:center; gap:11px; margin-bottom:24px; padding:11px 12px; color:var(--text-2); background:linear-gradient(90deg,rgba(45,212,191,.1),rgba(25,29,37,.92) 55%); border:1px solid rgba(45,212,191,.2); border-radius:var(--radius-lg); box-shadow:inset 0 1px 0 rgba(255,255,255,.025); }
+.star-prompt-icon { display:grid; place-items:center; flex:0 0 auto; width:30px; height:30px; color:var(--accent-hover); background:rgba(45,212,191,.1); border-radius:8px; }
+.star-prompt-copy { min-width:0; flex:1; font-size:12px; }
+.star-prompt-copy strong { color:var(--text); }
+.star-prompt-action { display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; gap:6px; min-height:32px; padding:6px 10px; color:#061412; background:var(--accent-strong); border:1px solid rgba(94,234,212,.3); border-radius:var(--radius-sm); font-size:11px; font-weight:800; }
+.star-prompt-action:hover { color:#061412; background:var(--accent); }
+.star-prompt-dismiss { flex:0 0 auto; width:28px; min-height:28px; padding:0; color:var(--muted); background:transparent; font-size:20px; font-weight:400; line-height:1; }
+.star-prompt-dismiss:hover { color:var(--text); background:rgba(255,255,255,.05); }
+
 @media (max-width: 900px) {
   .nav-brand-tagline { display:none; }
   .nav-links a { padding-inline:9px; }
@@ -190,4 +199,9 @@
   .main {
     padding: 28px 16px 44px;
   }
+
+  .star-prompt { align-items:flex-start; flex-wrap:wrap; }
+  .star-prompt-copy { flex-basis:calc(100% - 80px); }
+  .star-prompt-action { margin-left:41px; }
+  .star-prompt-dismiss { position:absolute; right:21px; }
 }
