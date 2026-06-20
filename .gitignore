@@ -5,7 +5,7 @@ web/node_modules/
 # Build outputs
 internal/web/dist/
 web/dist/
-bin/
+
 aptify
 
 # Data volumes
