@@ -1,6 +1,6 @@
 # Aptify — Self-hosted APT, simplified
 
-![Version](https://img.shields.io/badge/version-v1.0.6-blue.svg)
+![Version](https://img.shields.io/badge/version-v1.0.8-blue.svg)
 
 Aptify is a self-hosted APT repository manager with a clean web UI. Host, sign, and serve your own `.deb` packages without any external infrastructure.
 

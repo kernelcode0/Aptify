@@ -38,7 +38,7 @@ func setupTestHandler(t *testing.T) *Handler {
 		t.Fatalf("failed to create signer: %v", err)
 	}
 
-	return New(db, nil, nil, signer, "super_secret_test_jwt_key", "v1.0.6", nil)
+	return New(db, nil, nil, signer, "super_secret_test_jwt_key", "v1.0.8", nil)
 }
 
 func TestSecurityHeaders(t *testing.T) {
