@@ -76,6 +76,9 @@ func (o *commonOpts) resolve() (*Config, error) {
 	if o.server != "" {
 		cfg.Server = o.server
 	}
+	if cfg.Server != "" && !strings.HasPrefix(cfg.Server, "http://") && !strings.HasPrefix(cfg.Server, "https://") {
+		cfg.Server = "https://" + cfg.Server
+	}
 	if o.token != "" {
 		cfg.Token = o.token
 	}
@@ -140,6 +143,9 @@ func runLogin(args []string) {
 		os.Exit(1)
 	}
 	serverURL = strings.TrimRight(serverURL, "/")
+	if !strings.HasPrefix(serverURL, "http://") && !strings.HasPrefix(serverURL, "https://") {
+		serverURL = "https://" + serverURL
+	}
 
 	fmt.Print("Username: ")
 	var username string
