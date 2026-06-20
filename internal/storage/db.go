@@ -143,6 +143,7 @@ func (d *DB) migrate() error {
 			FOREIGN KEY (repo_id) REFERENCES repos(id) ON DELETE CASCADE,
 			INDEX idx_packages_repo (repo_id)
 		);`
+		/* #nosec G101 */
 		apiKeyTable = `
 		CREATE TABLE IF NOT EXISTS api_keys (
 			id          VARCHAR(36) PRIMARY KEY,
@@ -200,6 +201,7 @@ func (d *DB) migrate() error {
 			control_json TEXT NOT NULL DEFAULT '{}',
 			uploaded_at  DATETIME NOT NULL
 		);`
+		/* #nosec G101 */
 		apiKeyTable = `
 		CREATE TABLE IF NOT EXISTS api_keys (
 			id          TEXT PRIMARY KEY,
@@ -623,9 +625,9 @@ func (d *DB) ClearAuditLogExcept(ctx context.Context, keepEventID string) error 
 func (d *DB) LogAuditWithID(userID, username, action, resource, detail string) (string, error) {
 	id := uuid.NewString()
 	_, err := d.db.Exec(`
-		INSERT INTO audit_log (id, user_id, username, action, resource, detail)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, id, userID, username, action, resource, detail)
+		INSERT INTO audit_log (id, user_id, username, action, resource, detail, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, id, userID, username, action, resource, detail, time.Now().UTC())
 	return id, err
 }
 

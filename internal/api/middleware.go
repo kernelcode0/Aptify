@@ -43,9 +43,7 @@ func (h *Handler) audit(user *storage.User, action, resource, detail string) {
 	if user == nil {
 		return
 	}
-	go func() {
-		if err := h.db.AddAuditEntry(user.ID, user.Username, action, resource, detail); err != nil {
-			log.Printf("audit log write failed: %v", err)
-		}
-	}()
+	if err := h.db.AddAuditEntry(user.ID, user.Username, action, resource, detail); err != nil {
+		log.Printf("audit log write failed: %v", err)
+	}
 }

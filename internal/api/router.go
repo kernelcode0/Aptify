@@ -44,6 +44,7 @@ func (h *Handler) Router(spa http.Handler) http.Handler {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(SecurityHeaders)
+	r.Use(CSRFProtection)
 	
 	rl := newRateLimiter()
 
@@ -61,7 +62,6 @@ func (h *Handler) Router(spa http.Handler) http.Handler {
 	// Admin API — protected by JWT or API key.
 	r.Group(func(r chi.Router) {
 		r.Use(h.authMiddleware)
-		r.Use(CSRFProtection)
 		r.Get("/api/auth/check", h.authCheck)
 		r.Post("/api/auth/keys", h.createAPIKey)
 		r.Get("/api/auth/keys", h.listAPIKeys)

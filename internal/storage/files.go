@@ -112,6 +112,7 @@ func (fs *FileStore) SaveRPMPackage(slug, filename string, r io.Reader) (string,
 	}
 	filename = filepath.Base(filepath.Clean(filename))
 	dest := filepath.Join(dir, filename)
+	/* #nosec G304 */
 	f, err := os.OpenFile(dest, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return "", err
