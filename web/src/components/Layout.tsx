@@ -31,6 +31,7 @@ export default function Layout() {
   const navigate = useNavigate()
   const [checking, setChecking] = useState(true)
   const [user, setUser] = useState<CurrentUser | null>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
 
   useEffect(() => {
     api.checkAuth()
@@ -38,6 +39,8 @@ export default function Layout() {
       .catch(() => {})
       .finally(() => setChecking(false))
   }, [])
+
+  useEffect(() => setMenuOpen(false), [loc.pathname])
 
   const handleLogout = () => {
     setToken('')
@@ -63,7 +66,11 @@ export default function Layout() {
           </span>
         </Link>
 
-        <div className="nav-right">
+        <button className="nav-toggle" onClick={() => setMenuOpen(open => !open)} aria-expanded={menuOpen} aria-controls="primary-navigation" aria-label="Toggle navigation">
+          <span /><span /><span />
+        </button>
+
+        <div className={`nav-right ${menuOpen ? 'open' : ''}`} id="primary-navigation">
           <div className="nav-links">
             <Link to="/" className={loc.pathname === '/' ? 'active' : ''}>Repositories</Link>
             {user?.role !== 'viewer' && <Link to="/api-keys" className={loc.pathname === '/api-keys' ? 'active' : ''}>API Keys</Link>}
@@ -71,8 +78,9 @@ export default function Layout() {
             {user?.role === 'admin' && <Link to="/audit" className={loc.pathname === '/audit' ? 'active' : ''}>Audit Log</Link>}
           </div>
           <div className="nav-divider" />
-          <Link to="/profile" className={`nav-link ${loc.pathname === '/profile' ? 'active' : ''}`} title={user?.username}>
-            {user?.username}
+          <Link to="/profile" className={`nav-link nav-profile ${loc.pathname === '/profile' ? 'active' : ''}`} title={user?.username}>
+            <span className="nav-avatar">{user?.username?.slice(0, 1).toUpperCase()}</span>
+            <span>{user?.username}</span>
           </Link>
           <button className="nav-logout" onClick={handleLogout}>
             <LogOutIcon />

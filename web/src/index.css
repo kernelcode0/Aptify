@@ -84,6 +84,11 @@ button.ghost {
 }
 button.ghost:hover { color: var(--text); border-color: var(--border-hover); background: var(--surface2); }
 
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 button.danger {
   background: transparent;
   color: var(--danger);
@@ -280,4 +285,8 @@ tbody tr:hover td { background: rgba(45, 212, 191, 0.045); }
   button { width: 100%; }
   .form-actions { flex-direction: column; }
   table { min-width: 680px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
