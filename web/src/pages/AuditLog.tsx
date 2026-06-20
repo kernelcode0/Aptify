@@ -86,9 +86,22 @@ export default function AuditLog() {
 }
 
 function Detail({ value }: { value: string }) {
-  if (!value) return <span className="muted-text">-</span>
+  if (!value || value === '{}') return <span className="muted-text">-</span>
   try {
-    return <pre className="audit-detail">{JSON.stringify(JSON.parse(value), null, 2)}</pre>
+    const parsed = JSON.parse(value)
+    if (typeof parsed === 'object' && parsed !== null && Object.keys(parsed).length > 0) {
+      return (
+        <div className="audit-detail-kv">
+          {Object.entries(parsed).map(([k, v]) => (
+            <div key={k} className="kv-row">
+              <span className="kv-key">{k}:</span>
+              <span className="kv-val">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
+            </div>
+          ))}
+        </div>
+      )
+    }
+    return <pre className="audit-detail">{JSON.stringify(parsed, null, 2)}</pre>
   } catch {
     return <span className="audit-raw">{value}</span>
   }
