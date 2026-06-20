@@ -311,12 +311,18 @@ func (d *DB) ensureUserRoleColumn() error {
 }
 
 func (d *DB) columnExists(table, column string) (bool, error) {
+	// Whitelist table names to prevent SQL injection via string concatenation
+	validTables := map[string]bool{"users": true, "repos": true, "packages": true, "api_keys": true, "audit_log": true}
+	if !validTables[table] {
+		return false, fmt.Errorf("invalid table name")
+	}
+
 	var rows *sql.Rows
 	var err error
 	if d.dbType == "mysql" {
-		rows, err = d.db.Query("SHOW COLUMNS FROM " + table + " WHERE Field = ?", column)
+		rows, err = d.db.Query("SHOW COLUMNS FROM "+table+" WHERE Field = ?", column) // #nosec G202
 	} else {
-		rows, err = d.db.Query(`PRAGMA table_info(` + table + `)`)
+		rows, err = d.db.Query(`PRAGMA table_info(` + table + `)`) // #nosec G202
 	}
 	if err != nil {
 		return false, err

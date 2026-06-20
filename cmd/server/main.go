@@ -9,7 +9,9 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
+	"time"
 
 	"github.com/kernelcode0/aptify/internal/api"
 	"github.com/kernelcode0/aptify/internal/index"
@@ -30,7 +32,7 @@ func main() {
 		dataDir = "./data"
 	}
 
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
+	if err := os.MkdirAll(dataDir, 0750); err != nil {
 		log.Fatalf("failed to create data dir: %v", err)
 	}
 
@@ -54,6 +56,7 @@ func main() {
 	if adminUser == "" {
 		adminUser = "admin"
 	}
+	adminUser = strings.ReplaceAll(strings.ReplaceAll(adminUser, "\n", ""), "\r", "")
 	adminPass := os.Getenv("ADMIN_PASSWORD")
 	if adminPass == "" {
 		adminPass = "admin123"
@@ -71,7 +74,7 @@ func main() {
 		if _, err := db.CreateUser(adminUser, string(hash), "admin"); err != nil {
 			log.Fatalf("failed to create admin user: %v", err)
 		}
-		log.Printf("Created default admin user: %s", adminUser)
+		log.Printf("Created default admin user: %s", adminUser) // #nosec G706
 	}
 
 	fs, err := storage.NewFileStore(dataDir)
@@ -131,11 +134,16 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
+	port = strings.ReplaceAll(strings.ReplaceAll(port, "\n", ""), "\r", "")
 
-	srv := &http.Server{Addr: ":" + port, Handler: r}
+	srv := &http.Server{
+		Addr:              ":" + port,
+		Handler:           r,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
 
 	go func() {
-		log.Printf("Starting Aptify server on :%s", port)
+		log.Printf("Starting Aptify server on :%s", port) // #nosec G706
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server error: %v", err)
 		}
