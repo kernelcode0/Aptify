@@ -18,25 +18,25 @@ services:
       - KEY_NAME=${KEY_NAME:-"APT Repository"}
       - KEY_EMAIL=${KEY_EMAIL:-"abc@example.com"}
       # To use MySQL, uncomment the lines below and the db service:
-      # - DB_TYPE=mysql
-      # - DB_DSN=aptify:aptifypass@tcp(db:3306)/aptify?parseTime=true
+      - DB_TYPE=mysql
+      - DB_DSN=aptify:aptifypass@tcp(db:3306)/aptify?parseTime=true
     restart: unless-stopped
-    # depends_on:
-    #   - db
+    depends_on:
+      - db
 
   # Uncomment to use MySQL instead of the default SQLite
-  # db:
-  #   image: mysql:8
-  #   environment:
-  #     - MYSQL_DATABASE=aptify
-  #     - MYSQL_USER=aptify
-  #     - MYSQL_PASSWORD=aptifypass
-  #     - MYSQL_ROOT_PASSWORD=rootpass
-  #   ports:
-  #     - "3306:3306"
-  #   volumes:
-  #     - mysql-data:/var/lib/mysql
+  db:
+    image: mysql:8
+    environment:
+      - MYSQL_DATABASE=aptify
+      - MYSQL_USER=aptify
+      - MYSQL_PASSWORD=aptifypass
+      - MYSQL_ROOT_PASSWORD=rootpass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
 
 volumes:
   apt-data:
-  # mysql-data:
+  mysql-data:

@@ -7,7 +7,7 @@ internal/web/dist/
 web/dist/
 
 aptify
-
+/bin/*
 # Data volumes
 data/
 apt-data/
@@ -19,3 +19,4 @@ apt-repository
 
 # Environment
 .env
+dist
