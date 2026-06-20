@@ -3,7 +3,7 @@ services:
     build:
       context: .
       args:
-        VERSION: ${VERSION:-dev}
+        VERSION: ${VERSION:-v1.0.6}
     ports:
       - "8080:8080"
     volumes:
@@ -12,30 +12,40 @@ services:
       - DATA_DIR=/data
       - ADDR=:8080
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
-      # Generate the key using openssl rand -hex 32
-      - JWT_SECRET=supersecretvalue123
-      - KEY_NAME=${KEY_NAME:-"APT Repository"}
-      - KEY_EMAIL=${KEY_EMAIL:-"abc@example.com"}
-      # To use MySQL, uncomment the lines below and the db service:
-      - DB_TYPE=mysql
-      - DB_DSN=aptify:aptifypass@tcp(db:3306)/aptify?parseTime=true
+      # REQUIRED: Set ADMIN_PASSWORD to a strong unique password.
+      # Must be at least 8 characters; known defaults (admin123, etc.) are rejected.
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      # REQUIRED: Generate with: openssl rand -hex 32
+      # Must be at least 32 characters; known defaults are rejected.
+      - JWT_SECRET=${JWT_SECRET}
+      - KEY_NAME=${KEY_NAME:-APT Repository}
+      - KEY_EMAIL=${KEY_EMAIL:-ops@example.com}
+      # Optional: set BASE_URL to the public URL when behind a TLS reverse proxy.
+      # Example: BASE_URL=https://apt.mycompany.com
+      - BASE_URL=${BASE_URL:-}
+      # To use MySQL, set DB_TYPE=mysql and provide DB_DSN via environment.
+      # See .env.example for the DSN format. Do NOT put credentials here.
+      - DB_TYPE=${DB_TYPE:-sqlite}
+      - DB_DSN=${DB_DSN:-}
     restart: unless-stopped
-    depends_on:
-      - db
+    # depends_on:
+    #   - db  # Uncomment when using the MySQL service below
 
-  # Uncomment to use MySQL instead of the default SQLite
-  db:
-    image: mysql:8
-    environment:
-      - MYSQL_DATABASE=aptify
-      - MYSQL_USER=aptify
-      - MYSQL_PASSWORD=aptifypass
-      - MYSQL_ROOT_PASSWORD=rootpass
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql-data:/var/lib/mysql
+  # Uncomment the db service to use MySQL instead of the default SQLite.
+  # Provide MYSQL_PASSWORD and MYSQL_ROOT_PASSWORD via a .env file or secrets manager.
+  # db:
+  #   image: mysql:8
+  #   environment:
+  #     - MYSQL_DATABASE=aptify
+  #     - MYSQL_USER=aptify
+  #     # REQUIRED: set in .env or via secrets manager — do not hardcode here.
+  #     - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+  #     - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+  #   ports:
+  #     # Bind to loopback only — do not expose MySQL to the public network.
+  #     - "127.0.0.1:3306:3306"
+  #   volumes:
+  #     - mysql-data:/var/lib/mysql
 
 volumes:
   apt-data:

@@ -1,6 +1,6 @@
 # Aptify — Self-hosted APT, simplified
 
-![Version](https://img.shields.io/badge/version-v1.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-v1.0.6-blue.svg)
 
 Aptify is a self-hosted APT repository manager with a clean web UI. Host, sign, and serve your own `.deb` packages without any external infrastructure.
 
@@ -91,7 +91,9 @@ If you find this software useful and it saves you time or money, consider suppor
 <a href="https://www.buymeacoffee.com/kernelcode0" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
 
 ### Why donate?
+
 Your support directly funds:
+
 - Server hosting and domain costs to keep the demo/project alive
 - Late-night coding sessions and ongoing maintenance
 - Keeping Aptify 100% free and open-source forever!

@@ -142,7 +142,11 @@ func extractControlFromTar(name string, r io.Reader) (string, error) {
 		}
 		base := strings.TrimPrefix(hdr.Name, "./")
 		if base == "control" {
-			data, err := io.ReadAll(tr)
+			var r io.Reader = tr
+		if hdr.Size > 0 {
+			r = io.LimitReader(tr, 1024*1024) // 1 MiB limit for control files to prevent zip bombs
+		}
+		data, err := io.ReadAll(r)
 			if err != nil {
 				return "", err
 			}

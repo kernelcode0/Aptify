@@ -2,7 +2,9 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 
@@ -54,7 +56,8 @@ func (h *Handler) createRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if existing != nil {
-		jsonError(w, "slug already exists", http.StatusConflict)
+		suggestion := req.Slug + "-" + req.Type
+		jsonError(w, fmt.Sprintf("slug %q is already used by a %s repository; repository slugs are shared across DEB and RPM, so use a unique slug such as %q", req.Slug, strings.ToUpper(existing.Type), suggestion), http.StatusConflict)
 		return
 	}
 
@@ -172,6 +175,17 @@ func (h *Handler) updateRepo(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, repo, http.StatusOK)
 }
 
+func baseURLFromRequest(r *http.Request) string {
+	if configBase := os.Getenv("BASE_URL"); configBase != "" {
+		return strings.TrimSuffix(configBase, "/")
+	}
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	return fmt.Sprintf("%s://%s", scheme, r.Host)
+}
+
 func (h *Handler) getSetup(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	repo, err := h.db.GetRepo(id)
@@ -180,13 +194,7 @@ func (h *Handler) getSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	} else if fwd := r.Header.Get("X-Forwarded-Proto"); fwd != "" {
-		scheme = fwd
-	}
-	baseURL := scheme + "://" + r.Host
+	baseURL := baseURLFromRequest(r)
 
 	arches, _ := h.db.GetRepoArchitectures(repo.ID)
 	archStr := "amd64"

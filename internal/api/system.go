@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"os"
 )
 
 func (h *Handler) health(w http.ResponseWriter, r *http.Request) {
@@ -10,13 +11,17 @@ func (h *Handler) health(w http.ResponseWriter, r *http.Request) {
 		dbStatus = "error"
 	}
 	jsonOK(w, map[string]string{
-		"status":  "ok",
-		"version": h.version,
-		"db":      dbStatus,
+		"status": "ok",
+		"db":     dbStatus,
 	}, http.StatusOK)
 }
 
 func (h *Handler) exportGPGKey(w http.ResponseWriter, r *http.Request) {
+	if os.Getenv("ENABLE_PRIVATE_KEY_EXPORT") != "true" {
+		jsonError(w, "private key export is disabled", http.StatusForbidden)
+		return
+	}
+
 	privKey, err := h.signer.PrivateKeyArmored()
 	if err != nil {
 		jsonError(w, "failed to export key", http.StatusInternalServerError)

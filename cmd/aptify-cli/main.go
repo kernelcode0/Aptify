@@ -8,6 +8,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/http/cookiejar"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,9 @@ import (
 
 	"golang.org/x/term"
 )
+
+// version is overridden by release builds via -ldflags "-X main.version=vX.Y.Z".
+var version = "v1.0.6"
 
 // Config is stored at ~/.config/aptify/config.json.
 type Config struct {
@@ -28,6 +32,7 @@ func defaultConfigPath() string {
 }
 
 func loadConfig(path string) (*Config, error) {
+	/* #nosec G304 */
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -75,6 +80,9 @@ func (o *commonOpts) resolve() (*Config, error) {
 	if o.server != "" {
 		cfg.Server = o.server
 	}
+	if cfg.Server != "" && !strings.HasPrefix(cfg.Server, "http://") && !strings.HasPrefix(cfg.Server, "https://") {
+		cfg.Server = "https://" + cfg.Server
+	}
 	if o.token != "" {
 		cfg.Token = o.token
 	}
@@ -94,6 +102,12 @@ func (o *commonOpts) requireConfig() (*Config, error) {
 
 // apiDo performs an authenticated JSON request and returns the response body.
 func apiDo(method, url, token string, body io.Reader, contentType string) (*http.Response, error) {
+	return apiDoWithClient(http.DefaultClient, method, url, token, body, contentType, "")
+}
+
+// apiDoWithClient supports the short-lived cookie session used during login.
+// origin is only needed for cookie-authenticated state-changing requests.
+func apiDoWithClient(client *http.Client, method, url, token string, body io.Reader, contentType, origin string) (*http.Response, error) {
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
 		return nil, err
@@ -104,7 +118,10 @@ func apiDo(method, url, token string, body io.Reader, contentType string) (*http
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
-	return http.DefaultClient.Do(req)
+	if origin != "" {
+		req.Header.Set("Origin", origin)
+	}
+	return client.Do(req)
 }
 
 func jsonBody(v any) (io.Reader, string, error) {
@@ -126,6 +143,44 @@ func errBody(resp *http.Response) string {
 	return strings.TrimSpace(string(b))
 }
 
+func normalizeServerURL(serverURL string) string {
+	serverURL = strings.TrimRight(strings.TrimSpace(serverURL), "/")
+	if serverURL != "" && !strings.HasPrefix(serverURL, "http://") && !strings.HasPrefix(serverURL, "https://") {
+		serverURL = "https://" + serverURL
+	}
+	return serverURL
+}
+
+// existingLoginValid checks whether the config already contains a working API
+// key for this server. A rejected key permits a fresh login; connectivity and
+// unexpected server errors are returned so login cannot accidentally mint a
+// duplicate key when validation was inconclusive.
+func existingLoginValid(client *http.Client, configPath, serverURL string) (bool, error) {
+	cfg, err := loadConfig(configPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("read config: %w", err)
+	}
+	if normalizeServerURL(cfg.Server) != normalizeServerURL(serverURL) || cfg.Token == "" {
+		return false, nil
+	}
+
+	resp, err := apiDoWithClient(client, http.MethodGet, normalizeServerURL(serverURL)+"/api/auth/check", cfg.Token, nil, "", "")
+	if err != nil {
+		return false, fmt.Errorf("verify saved API key: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusOK {
+		return true, nil
+	}
+	if resp.StatusCode == http.StatusUnauthorized {
+		return false, nil
+	}
+	return false, fmt.Errorf("verify saved API key: server returned %s: %s", resp.Status, errBody(resp))
+}
+
 // ---- commands ---------------------------------------------------------------
 
 func runLogin(args []string) {
@@ -138,11 +193,21 @@ func runLogin(args []string) {
 		fmt.Fprintln(os.Stderr, "usage: aptify-cli login <server-url>")
 		os.Exit(1)
 	}
-	serverURL = strings.TrimRight(serverURL, "/")
+	serverURL = normalizeServerURL(serverURL)
+
+	alreadyLoggedIn, err := existingLoginValid(http.DefaultClient, opts.configPath, serverURL)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "login check failed:", err)
+		os.Exit(1)
+	}
+	if alreadyLoggedIn {
+		fmt.Printf("Already logged in to %s. Using the saved API key.\n", serverURL)
+		return
+	}
 
 	fmt.Print("Username: ")
 	var username string
-	fmt.Scanln(&username)
+	_, _ = fmt.Scanln(&username)
 
 	fmt.Print("Password: ")
 	pwBytes, err := term.ReadPassword(int(syscall.Stdin))
@@ -153,9 +218,15 @@ func runLogin(args []string) {
 	}
 	password := string(pwBytes)
 
-	// 1. Get a JWT.
+	// 1. Log in with a short-lived cookie session.
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "initialize login session:", err)
+		os.Exit(1)
+	}
+	client := &http.Client{Jar: jar}
 	body, ct, _ := jsonBody(map[string]string{"username": username, "password": password})
-	resp, err := apiDo("POST", serverURL+"/api/auth/login", "", body, ct)
+	resp, err := apiDoWithClient(client, "POST", serverURL+"/api/auth/login", "", body, ct, serverURL)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "login failed:", err)
 		os.Exit(1)
@@ -165,19 +236,13 @@ func runLogin(args []string) {
 		fmt.Fprintf(os.Stderr, "login failed: %s\n", errBody(resp))
 		os.Exit(1)
 	}
-	var loginResp struct {
-		Token string `json:"token"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&loginResp); err != nil {
-		fmt.Fprintln(os.Stderr, "decode login response:", err)
-		os.Exit(1)
-	}
+	_, _ = io.Copy(io.Discard, resp.Body)
 
-	// 2. Create an API key using the JWT.
+	// 2. Create an API key using the cookie session.
 	hostname, _ := os.Hostname()
 	keyName := "cli-" + hostname
 	body2, ct2, _ := jsonBody(map[string]string{"name": keyName})
-	resp2, err := apiDo("POST", serverURL+"/api/auth/keys", loginResp.Token, body2, ct2)
+	resp2, err := apiDoWithClient(client, "POST", serverURL+"/api/auth/keys", "", body2, ct2, serverURL)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "create api key failed:", err)
 		os.Exit(1)
@@ -298,6 +363,7 @@ func runPush(args []string) {
 }
 
 func uploadDeb(serverURL, repoID, token, filePath string) (int, string, error) {
+	/* #nosec G304 */
 	f, err := os.Open(filePath)
 	if err != nil {
 		return 0, "", err
@@ -389,7 +455,7 @@ func runWhoami(args []string) {
 		fmt.Fprintf(os.Stderr, "Not logged in or token expired. Run: aptify-cli login <server>\n")
 		os.Exit(1)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	fmt.Printf("Server: %s\nToken:  valid\n", cfg.Server)
 }
 
@@ -408,7 +474,7 @@ func runLogout(args []string) {
 // ---- main -------------------------------------------------------------------
 
 func usage() {
-	fmt.Fprintf(os.Stderr, `aptify-cli — Aptify command-line client
+	fmt.Fprintf(os.Stderr, `aptify-cli %s — Aptify command-line client
 
 Commands:
   login <server-url>             Authenticate and save an API key
@@ -421,7 +487,7 @@ Flags (all commands):
   --server  <url>    Override config file server
   --token   <key>    Override config file token
   --config  <path>   Override config file path (default: ~/.config/aptify/config.json)
-`)
+`, version)
 }
 
 func main() {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { api, type CurrentUser, type Role, type User } from '../api'
 import './Users.css'
@@ -56,10 +56,13 @@ export default function Users() {
   const [error, setError] = useState('')
   const [showNew, setShowNew] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState('')
   const [newUser, setNewUser] = useState({ username: '', password: '', role: 'viewer' as Role })
   const [editing, setEditing] = useState<string | null>(null)
   const [editRole, setEditRole] = useState<Role>('viewer')
   const [editPassword, setEditPassword] = useState('')
+  const [query, setQuery] = useState('')
+  const [roleFilter, setRoleFilter] = useState<'all' | Role>('all')
 
   const load = () => {
     api.listUsers()
@@ -70,17 +73,24 @@ export default function Users() {
 
   useEffect(load, [])
 
+  const visibleUsers = useMemo(() => {
+    const term = query.trim().toLowerCase()
+    return users.filter(u => (roleFilter === 'all' || u.role === roleFilter) && (!term || u.username.toLowerCase().includes(term)))
+  }, [users, query, roleFilter])
+
+  const roleCount = (role: Role) => users.filter(user => user.role === role).length
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     setCreating(true)
-    setError('')
+    setCreateError('')
     try {
       const created = await api.createUser(newUser.username.trim(), newUser.password, newUser.role)
       setUsers(prev => [...prev, created])
       setNewUser({ username: '', password: '', role: 'viewer' })
       setShowNew(false)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'failed to create user')
+      setCreateError(e instanceof Error ? e.message : 'failed to create user')
     } finally {
       setCreating(false)
     }
@@ -118,15 +128,15 @@ export default function Users() {
   }
 
   return (
-    <div>
+    <div className="users-page">
       <div className="page-header">
         <div>
           <div className="page-kicker">Access control</div>
           <h1 className="page-title">Users</h1>
-          <p className="page-sub">{users.length} account{users.length !== 1 ? 's' : ''}</p>
+          <p className="page-sub">Manage who can access Aptify and what they can do.</p>
         </div>
         <div className="page-actions">
-          <button className="primary" onClick={() => setShowNew(true)}>
+          <button className="primary" onClick={() => { setCreateError(''); setShowNew(true) }}>
             <PlusIcon />
             Add User
           </button>
@@ -134,6 +144,13 @@ export default function Users() {
       </div>
 
       {error && <div className="alert-error"><AlertIcon />{error}</div>}
+
+      {!loading && <div className="user-metrics" aria-label="User overview">
+        <div className="user-metric user-metric-total"><span>Workspace accounts</span><strong>{users.length}</strong><small>{users.length === 1 ? 'Active identity' : 'Active identities'}</small></div>
+        <div className="user-metric"><i className="metric-admin" /><span>Administrators</span><strong>{roleCount('admin')}</strong></div>
+        <div className="user-metric"><i className="metric-member" /><span>Members</span><strong>{roleCount('member')}</strong></div>
+        <div className="user-metric"><i className="metric-viewer" /><span>Viewers</span><strong>{roleCount('viewer')}</strong></div>
+      </div>}
 
       {showNew && (
         <div className="overlay" onClick={e => { if (e.target === e.currentTarget) setShowNew(false) }}>
@@ -143,9 +160,11 @@ export default function Users() {
               <button className="modal-close" onClick={() => setShowNew(false)} aria-label="Close"><XIcon /></button>
             </div>
             <form onSubmit={handleCreate} className="form-stack">
+              {createError && <div className="alert-error" role="alert"><AlertIcon />{createError}</div>}
               <div className="field">
                 <label>Username</label>
-                <input value={newUser.username} onChange={e => setNewUser(f => ({ ...f, username: e.target.value }))} minLength={3} maxLength={32} required autoFocus />
+                <input value={newUser.username} onChange={e => { setCreateError(''); setNewUser(f => ({ ...f, username: e.target.value })) }} minLength={3} maxLength={32} pattern="[A-Za-z0-9_.-]{3,32}" aria-invalid={createError.toLowerCase().includes('username')} required autoFocus />
+                <span className="field-hint">3-32 characters. Letters, numbers, dots, hyphens, and underscores are allowed.</span>
               </div>
               <div className="field">
                 <label>Password</label>
@@ -173,7 +192,15 @@ export default function Users() {
       {loading ? (
         <div className="loading-center"><div className="spinner" /></div>
       ) : (
-        <div className="package-table card">
+        <section className="users-collection">
+          <div className="users-collection-header">
+            <div><h2>Workspace users</h2><p>{visibleUsers.length === users.length ? `${users.length} account${users.length === 1 ? '' : 's'}` : `${visibleUsers.length} of ${users.length} accounts`}</p></div>
+            <div className="users-toolbar">
+              <label className="user-search"><span className="search-symbol" aria-hidden="true" /><span className="sr-only">Search users</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search users…" /></label>
+              <label><span className="sr-only">Filter by role</span><select value={roleFilter} onChange={e => setRoleFilter(e.target.value as 'all' | Role)}><option value="all">All roles</option><option value="admin">Administrators</option><option value="member">Members</option><option value="viewer">Viewers</option></select></label>
+            </div>
+          </div>
+        <div className="package-table card users-table">
           <table>
             <thead>
               <tr>
@@ -184,11 +211,11 @@ export default function Users() {
               </tr>
             </thead>
             <tbody>
-              {users.map(u => {
+              {visibleUsers.map(u => {
                 const isSelf = current?.user_id === u.id
                 return (
                   <tr key={u.id}>
-                    <td><span className="pkg-name">{u.username}</span>{isSelf && <span className="self-label">You</span>}</td>
+                    <td><div className="user-identity"><span className={`user-avatar avatar-${u.role}`}>{u.username.slice(0, 2).toUpperCase()}</span><span><strong>{u.username}</strong><small>{isSelf ? 'Your account' : 'Workspace user'}</small></span>{isSelf && <span className="self-label">You</span>}</div></td>
                     <td>
                       {editing === u.id ? (
                         <select value={editRole} disabled={isSelf} onChange={e => setEditRole(e.target.value as Role)}>
@@ -218,9 +245,11 @@ export default function Users() {
                   </tr>
                 )
               })}
+              {visibleUsers.length === 0 && <tr><td colSpan={4}><div className="users-no-results"><strong>No users found</strong><span>Try a different name or role.</span><button className="ghost" onClick={() => { setQuery(''); setRoleFilter('all') }}>Clear filters</button></div></td></tr>}
             </tbody>
           </table>
         </div>
+        </section>
       )}
     </div>
   )
