@@ -43,6 +43,9 @@ func (h *Handler) Router(spa http.Handler) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(SecurityHeaders)
+	
+	rl := newRateLimiter()
 
 	// Public endpoints — no auth.
 	r.Get("/health", h.health)
@@ -53,11 +56,12 @@ func (h *Handler) Router(spa http.Handler) http.Handler {
 	r.Get("/repo/{slug}/packages/*", h.serveRepoFile)
 
 	// Auth endpoint
-	r.Post("/api/auth/login", h.login)
+	r.With(rl.RateLimit).Post("/api/auth/login", h.login)
 
 	// Admin API — protected by JWT or API key.
 	r.Group(func(r chi.Router) {
 		r.Use(h.authMiddleware)
+		r.Use(CSRFProtection)
 		r.Get("/api/auth/check", h.authCheck)
 		r.Post("/api/auth/keys", h.createAPIKey)
 		r.Get("/api/auth/keys", h.listAPIKeys)
@@ -76,6 +80,7 @@ func (h *Handler) Router(spa http.Handler) http.Handler {
 		r.With(RequireRole("admin")).Put("/api/users/{id}", h.updateUser)
 		r.With(RequireRole("admin")).Delete("/api/users/{id}", h.deleteUser)
 		r.With(RequireRole("admin")).Get("/api/audit", h.listAuditLog)
+		r.With(RequireRole("admin")).Delete("/api/audit", h.clearAuditLog)
 		r.Get("/api/system/gpg-key", h.exportGPGKey)
 	})
 
@@ -86,8 +91,22 @@ func (h *Handler) Router(spa http.Handler) http.Handler {
 
 func (h *Handler) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		auth := r.Header.Get("Authorization")
-		tokenStr := strings.TrimPrefix(auth, "Bearer ")
+		var tokenStr string
+
+		// 1. Try apt_session cookie (preferred for Web UI)
+		cookie, err := r.Cookie("apt_session")
+		if err == nil && cookie.Value != "" {
+			tokenStr = cookie.Value
+		} else {
+			// 2. Try Authorization header (for API keys/CLI)
+			auth := r.Header.Get("Authorization")
+			tokenStr = strings.TrimPrefix(auth, "Bearer ")
+		}
+
+		if tokenStr == "" {
+			jsonError(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 
 		// 1. Try JWT.
 		token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {

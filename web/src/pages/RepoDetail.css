@@ -148,34 +148,6 @@
   color: var(--muted);
 }
 
-.package-table {
-  padding: 0;
-  overflow: hidden;
-}
-
-.pkg-name {
-  font-weight: 720;
-  font-size: 13px;
-}
-.pkg-version {
-  color: var(--text-2);
-}
-
-.icon-btn {
-  padding: 6px 8px;
-  min-height: 30px;
-  width: 32px;
-  border-radius: var(--radius-sm);
-}
-
-.pagination {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  border-top: 1px solid var(--border);
-}
-
 .setup {
   display: flex;
   flex-direction: column;

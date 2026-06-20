@@ -1,11 +1,11 @@
-const TOKEN_KEY = 'apt_admin_token'
-
+// getToken/setToken are preserved as no-ops for API key upload path compatibility.
+// No token is stored in JavaScript — localStorage was removed to prevent XSS theft.
 export function getToken(): string {
-  return localStorage.getItem(TOKEN_KEY) ?? ''
+  return ''
 }
 
-export function setToken(t: string) {
-  localStorage.setItem(TOKEN_KEY, t)
+export function setToken(_t: string) {
+  // no-op
 }
 
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -17,11 +17,11 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
   const res = await fetch(path, {
     method,
     headers,
+    credentials: 'same-origin', // Send HttpOnly session cookie
     body: body ? JSON.stringify(body) : undefined,
   })
   if (!res.ok) {
     if (res.status === 401 && window.location.pathname !== '/login') {
-      setToken('')
       window.location.href = '/login'
     }
     const err = await res.json().catch(() => ({ error: res.statusText }))
@@ -145,11 +145,11 @@ export const api = {
     const res = await fetch(`/api/repos/${repoId}/packages`, {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: 'same-origin', // Send HttpOnly session cookie
       body: form,
     })
     if (!res.ok) {
       if (res.status === 401 && window.location.pathname !== '/login') {
-        setToken('')
         window.location.href = '/login'
       }
       const err = await res.json().catch(() => ({ error: res.statusText }))
@@ -171,4 +171,5 @@ export const api = {
   deleteUser: (id: string) => req<void>('DELETE', `/api/users/${id}`),
   listAudit: (offset: number = 0, limit: number = 50) =>
     req<AuditList>('GET', `/api/audit?offset=${offset}&limit=${limit}`),
+  clearAudit: () => req<void>('DELETE', '/api/audit'),
 }

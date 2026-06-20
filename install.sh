@@ -43,6 +43,34 @@ fi
 echo "Downloading $DOWNLOAD_URL..."
 TMP_BIN="/tmp/aptify-cli$EXT"
 curl -sSL "$DOWNLOAD_URL" -o "$TMP_BIN"
+
+echo "Fetching checksums..."
+CHECKSUM_URL=$(curl -s "$API_URL" | grep -o "https://github.com/[^\"]*checksums.txt" || true)
+
+if [ -n "$CHECKSUM_URL" ]; then
+  curl -sSL "$CHECKSUM_URL" -o "/tmp/checksums.txt"
+  EXPECTED_HASH=$(grep "$BINARY_NAME" "/tmp/checksums.txt" | awk '{print $1}')
+  
+  if [ -n "$EXPECTED_HASH" ]; then
+    echo "Verifying checksum..."
+    if command -v sha256sum >/dev/null 2>&1; then
+      ACTUAL_HASH=$(sha256sum "$TMP_BIN" | awk '{print $1}')
+    else
+      ACTUAL_HASH=$(shasum -a 256 "$TMP_BIN" | awk '{print $1}')
+    fi
+    
+    if [ "$EXPECTED_HASH" != "$ACTUAL_HASH" ]; then
+      echo "Error: Checksum mismatch! Expected $EXPECTED_HASH, got $ACTUAL_HASH."
+      echo "This could indicate a corrupted download or a supply chain attack."
+      rm -f "$TMP_BIN"
+      exit 1
+    fi
+    echo "Checksum verified successfully."
+  else
+    echo "Warning: No checksum found for $BINARY_NAME in checksums.txt. Proceeding without verification."
+  fi
+fi
+
 chmod +x "$TMP_BIN"
 
 DEST="/usr/local/bin/aptify-cli$EXT"

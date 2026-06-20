@@ -40,7 +40,7 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 		"sub": user.ID,
 		"usr": user.Username,
 		"rol": user.Role,
-		"exp": time.Now().Add(24 * time.Hour).Unix(),
+		"exp": time.Now().Add(2 * time.Hour).Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString([]byte(h.jwtSecret))
@@ -49,8 +49,18 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	http.SetCookie(w, &http.Cookie{
+		Name:     "apt_session",
+		Value:    tokenString,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   7200, // 2 hours
+	})
+
 	h.audit(user, "login", "user:"+user.Username, "")
-	jsonOK(w, map[string]string{"token": tokenString}, http.StatusOK)
+	jsonOK(w, map[string]string{"status": "ok"}, http.StatusOK)
 }
 
 func (h *Handler) authCheck(w http.ResponseWriter, r *http.Request) {

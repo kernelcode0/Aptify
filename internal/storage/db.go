@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"time"
@@ -533,7 +534,7 @@ func (d *DB) AddPackage(p *Package) error {
 
 // ListPackages returns all packages for a repo. If limit > 0, it applies pagination.
 func (d *DB) ListPackages(repoID string, limit, offset int) ([]Package, error) {
-	query := `SELECT id, repo_id, filename, package, version, `+"`release`"+`, arch, size, sha256, sha1, md5, control_json, uploaded_at
+	query := `SELECT id, repo_id, filename, package, version, ` + "`release`" + `, arch, size, sha256, sha1, md5, control_json, uploaded_at
 		 FROM packages WHERE repo_id=? ORDER BY uploaded_at DESC`
 
 	var rows *sql.Rows
@@ -611,6 +612,22 @@ func (d *DB) PackageFilenameExists(repoID, filename string) (string, bool, error
 }
 
 func (d *DB) Close() error { return d.db.Close() }
+
+// ClearAuditLogExcept deletes all audit logs except the provided eventID.
+// This is an Option B forensic marker mechanism.
+func (d *DB) ClearAuditLogExcept(ctx context.Context, keepEventID string) error {
+	_, err := d.db.ExecContext(ctx, `DELETE FROM audit_log WHERE id != ?`, keepEventID)
+	return err
+}
+
+func (d *DB) LogAuditWithID(userID, username, action, resource, detail string) (string, error) {
+	id := uuid.NewString()
+	_, err := d.db.Exec(`
+		INSERT INTO audit_log (id, user_id, username, action, resource, detail)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, id, userID, username, action, resource, detail)
+	return id, err
+}
 
 // CreateAPIKey inserts a new API key record.
 func (d *DB) CreateAPIKey(userID, name, keyHash, prefix string) (*APIKey, error) {
@@ -732,6 +749,12 @@ func (d *DB) CountAuditLog(userID string) (int, error) {
 		err = d.db.QueryRow(`SELECT COUNT(*) FROM audit_log WHERE user_id=?`, userID).Scan(&count)
 	}
 	return count, err
+}
+
+// ClearAuditLog permanently removes every audit log entry.
+func (d *DB) ClearAuditLog() error {
+	_, err := d.db.Exec(`DELETE FROM audit_log`)
+	return err
 }
 
 func scanAuditEntries(rows *sql.Rows) ([]AuditEntry, error) {

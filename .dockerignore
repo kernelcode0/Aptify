@@ -9,4 +9,12 @@ tmp
 *.db
 *.db-shm
 *.db-wal
+# Never include secrets, keys, or local env files in the Docker build context.
 .env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+secrets/
