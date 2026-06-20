@@ -108,14 +108,8 @@ func (h *Handler) uploadPackage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.regenerateRepoIndex(repo); err != nil {
-		_ = h.db.DeletePackage(pkg.ID)
-		cleanupSavedFile()
-		_ = h.regenerateRepoIndex(repo)
-		jsonError(w, "index regenerate error: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
+	// Enqueue index regeneration asynchronously; return 201 immediately.
+	h.queue.Enqueue(repo.ID)
 	jsonOK(w, pkg, http.StatusCreated)
 }
 
@@ -193,6 +187,21 @@ func (h *Handler) deletePackage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) getRepoStatus(w http.ResponseWriter, r *http.Request) {
+	repoID := chi.URLParam(r, "id")
+	repo, err := h.db.GetRepo(repoID)
+	if err != nil || repo == nil {
+		jsonError(w, "repo not found", http.StatusNotFound)
+		return
+	}
+	s := h.queue.RepoStatus(repoID)
+	jsonOK(w, map[string]any{
+		"id":           repoID,
+		"indexing":     s.Indexing,
+		"last_indexed": s.LastIndexed,
+	}, http.StatusOK)
 }
 
 // sanitizeFilename strips path components and normalises the filename.

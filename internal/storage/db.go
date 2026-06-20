@@ -16,6 +16,17 @@ type DB struct {
 	dbType string
 }
 
+// APIKey represents an API key record.
+type APIKey struct {
+	ID        string     `json:"id"`
+	UserID    string     `json:"user_id"`
+	Name      string     `json:"name"`
+	Prefix    string     `json:"prefix"`
+	CreatedAt time.Time  `json:"created_at"`
+	LastUsed  *time.Time `json:"last_used"`
+	KeyHash   string     `json:"-"` // only populated for auth lookups
+}
+
 // User represents an administrator user.
 type User struct {
 	ID           string    `json:"id"`
@@ -80,7 +91,7 @@ func Open(dbType, dsn string) (*DB, error) {
 }
 
 func (d *DB) migrate() error {
-	var repoTable, pkgTable, userTable string
+	var repoTable, pkgTable, userTable, apiKeyTable string
 	if d.dbType == "mysql" {
 		userTable = `
 		CREATE TABLE IF NOT EXISTS users (
@@ -114,6 +125,17 @@ func (d *DB) migrate() error {
 			FOREIGN KEY (repo_id) REFERENCES repos(id) ON DELETE CASCADE,
 			INDEX idx_packages_repo (repo_id)
 		);`
+		apiKeyTable = `
+		CREATE TABLE IF NOT EXISTS api_keys (
+			id          VARCHAR(36) PRIMARY KEY,
+			user_id     VARCHAR(36) NOT NULL,
+			name        VARCHAR(255) NOT NULL,
+			key_hash    VARCHAR(255) NOT NULL UNIQUE,
+			prefix      VARCHAR(8) NOT NULL,
+			created_at  DATETIME NOT NULL,
+			last_used   DATETIME,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+		);`
 	} else {
 		userTable = `
 		CREATE TABLE IF NOT EXISTS users (
@@ -145,6 +167,16 @@ func (d *DB) migrate() error {
 			control_json TEXT NOT NULL DEFAULT '{}',
 			uploaded_at  DATETIME NOT NULL
 		);`
+		apiKeyTable = `
+		CREATE TABLE IF NOT EXISTS api_keys (
+			id          TEXT PRIMARY KEY,
+			user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			name        TEXT NOT NULL,
+			key_hash    TEXT NOT NULL UNIQUE,
+			prefix      TEXT NOT NULL,
+			created_at  DATETIME NOT NULL,
+			last_used   DATETIME
+		);`
 	}
 
 	if _, err := d.db.Exec(userTable); err != nil {
@@ -154,6 +186,9 @@ func (d *DB) migrate() error {
 		return err
 	}
 	if _, err := d.db.Exec(pkgTable); err != nil {
+		return err
+	}
+	if _, err := d.db.Exec(apiKeyTable); err != nil {
 		return err
 	}
 	if d.dbType == "sqlite" {
@@ -379,3 +414,76 @@ func (d *DB) PackageExists(repoID, packageName, version, arch, sha256 string) (s
 }
 
 func (d *DB) Close() error { return d.db.Close() }
+
+// CreateAPIKey inserts a new API key record.
+func (d *DB) CreateAPIKey(userID, name, keyHash, prefix string) (*APIKey, error) {
+	k := &APIKey{
+		ID:        uuid.NewString(),
+		UserID:    userID,
+		Name:      name,
+		Prefix:    prefix,
+		CreatedAt: time.Now().UTC(),
+	}
+	_, err := d.db.Exec(
+		`INSERT INTO api_keys (id, user_id, name, key_hash, prefix, created_at) VALUES (?,?,?,?,?,?)`,
+		k.ID, k.UserID, k.Name, keyHash, k.Prefix, k.CreatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create api key: %w", err)
+	}
+	return k, nil
+}
+
+// ListAPIKeys returns all API keys for a user.
+func (d *DB) ListAPIKeys(userID string) ([]APIKey, error) {
+	rows, err := d.db.Query(
+		`SELECT id, user_id, name, prefix, created_at, last_used FROM api_keys WHERE user_id=? ORDER BY created_at`,
+		userID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var keys []APIKey
+	for rows.Next() {
+		var k APIKey
+		if err := rows.Scan(&k.ID, &k.UserID, &k.Name, &k.Prefix, &k.CreatedAt, &k.LastUsed); err != nil {
+			return nil, err
+		}
+		keys = append(keys, k)
+	}
+	return keys, rows.Err()
+}
+
+// DeleteAPIKey removes an API key by ID and owner.
+func (d *DB) DeleteAPIKey(id, userID string) error {
+	_, err := d.db.Exec(`DELETE FROM api_keys WHERE id=? AND user_id=?`, id, userID)
+	return err
+}
+
+// GetAPIKeyByPrefix returns all keys matching the given prefix for bcrypt comparison.
+func (d *DB) GetAPIKeyByPrefix(prefix string) ([]APIKey, error) {
+	rows, err := d.db.Query(
+		`SELECT id, user_id, name, key_hash, prefix, created_at, last_used FROM api_keys WHERE prefix=?`,
+		prefix,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var keys []APIKey
+	for rows.Next() {
+		var k APIKey
+		if err := rows.Scan(&k.ID, &k.UserID, &k.Name, &k.KeyHash, &k.Prefix, &k.CreatedAt, &k.LastUsed); err != nil {
+			return nil, err
+		}
+		keys = append(keys, k)
+	}
+	return keys, rows.Err()
+}
+
+// UpdateAPIKeyLastUsed sets last_used to now for the given key.
+func (d *DB) UpdateAPIKeyLastUsed(id string) error {
+	_, err := d.db.Exec(`UPDATE api_keys SET last_used=? WHERE id=?`, time.Now().UTC(), id)
+	return err
+}
