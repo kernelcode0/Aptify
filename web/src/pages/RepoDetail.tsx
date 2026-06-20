@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
-import { api, type Package, type Repo, type RepoStatus, type SetupInfo } from '../api'
+import { useParams, useNavigate, Link, useOutletContext } from 'react-router-dom'
+import { api, type CurrentUser, type Package, type Repo, type RepoStatus, type SetupInfo } from '../api'
 import './RepoDetail.css'
 
 type Tab = 'packages' | 'setup'
@@ -73,6 +73,7 @@ function EmptyPackagesIcon() {
 }
 
 export default function RepoDetail() {
+  const { user } = useOutletContext<{ user: CurrentUser | null }>()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [repo, setRepo] = useState<Repo | null>(null)
@@ -90,6 +91,8 @@ export default function RepoDetail() {
   const [dragOver, setDragOver] = useState(false)
   const [indexStatus, setIndexStatus] = useState<RepoStatus | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const canManageRepo = user?.role === 'admin'
+  const canManagePackages = user?.role === 'admin' || user?.role === 'member'
 
   const loadRepo = async () => {
     if (!id) return
@@ -234,16 +237,18 @@ export default function RepoDetail() {
             <span className="muted-text">{totalPkgs} package{totalPkgs !== 1 ? 's' : ''}</span>
           </div>
         </div>
-        <div className="detail-actions">
-          <button className="ghost" onClick={openEdit}>
-            <EditIcon />
-            Edit
-          </button>
-          <button className="danger" onClick={handleDeleteRepo}>
-            <TrashIcon />
-            Delete
-          </button>
-        </div>
+        {canManageRepo && (
+          <div className="detail-actions">
+            <button className="ghost" onClick={openEdit}>
+              <EditIcon />
+              Edit
+            </button>
+            <button className="danger" onClick={handleDeleteRepo}>
+              <TrashIcon />
+              Delete
+            </button>
+          </div>
+        )}
       </div>
 
       {editing && (
@@ -305,33 +310,35 @@ export default function RepoDetail() {
               }
             </div>
           )}
-          <div
-            className={`upload-zone${dragOver ? ' drag-over' : ''}${uploading ? ' uploading' : ''}`}
-            onDragOver={e => { e.preventDefault(); setDragOver(true) }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={handleDrop}
-            onClick={() => inputRef.current?.click()}
-          >
-            <input ref={inputRef} type="file" accept=".deb" style={{ display: 'none' }}
-              onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f) }} />
-            {uploading ? (
-              <div className="upload-uploading">
-                <div className="spinner" />
-                <div>
-                  <div className="upload-title">Uploading and indexing…</div>
-                  <div className="upload-sub">This may take a moment</div>
+          {canManagePackages && (
+            <div
+              className={`upload-zone${dragOver ? ' drag-over' : ''}${uploading ? ' uploading' : ''}`}
+              onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
+              onClick={() => inputRef.current?.click()}
+            >
+              <input ref={inputRef} type="file" accept=".deb" style={{ display: 'none' }}
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f) }} />
+              {uploading ? (
+                <div className="upload-uploading">
+                  <div className="spinner" />
+                  <div>
+                    <div className="upload-title">Uploading and indexing…</div>
+                    <div className="upload-sub">This may take a moment</div>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div className="upload-idle">
-                <span className="upload-icon"><UploadIcon /></span>
-                <div>
-                  <div className="upload-title">Drop a <code>.deb</code> file here</div>
-                  <div className="upload-sub">or click to browse your files</div>
+              ) : (
+                <div className="upload-idle">
+                  <span className="upload-icon"><UploadIcon /></span>
+                  <div>
+                    <div className="upload-title">Drop a <code>.deb</code> file here</div>
+                    <div className="upload-sub">or click to browse your files</div>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
           {packages.length === 0 ? (
             <div className="empty-state">
@@ -361,9 +368,11 @@ export default function RepoDetail() {
                       <td className="muted-text">{formatBytes(p.size)}</td>
                       <td className="muted-text">{formatDate(p.uploaded_at)}</td>
                       <td>
-                        <button className="danger icon-btn" onClick={() => handleDelete(p)} title="Remove package">
-                          <TrashIcon />
-                        </button>
+                        {canManagePackages && (
+                          <button className="danger icon-btn" onClick={() => handleDelete(p)} title="Remove package">
+                            <TrashIcon />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}

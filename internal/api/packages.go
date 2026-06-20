@@ -110,6 +110,12 @@ func (h *Handler) uploadPackage(w http.ResponseWriter, r *http.Request) {
 
 	// Enqueue index regeneration asynchronously; return 201 immediately.
 	h.queue.Enqueue(repo.ID)
+	detail, _ := json.Marshal(map[string]string{
+		"repo":    repo.Slug,
+		"version": info.Version,
+		"arch":    info.Architecture,
+	})
+	h.audit(currentUser(r), "upload", "package:"+filename, string(detail))
 	jsonOK(w, pkg, http.StatusCreated)
 }
 
@@ -186,6 +192,8 @@ func (h *Handler) deletePackage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	detail, _ := json.Marshal(map[string]string{"repo": repo.Slug})
+	h.audit(currentUser(r), "delete_package", "package:"+pkg.Filename, string(detail))
 	w.WriteHeader(http.StatusNoContent)
 }
 

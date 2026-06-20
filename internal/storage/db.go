@@ -31,8 +31,20 @@ type APIKey struct {
 type User struct {
 	ID           string    `json:"id"`
 	Username     string    `json:"username"`
+	Role         string    `json:"role"`
 	PasswordHash string    `json:"-"`
 	CreatedAt    time.Time `json:"created_at"`
+}
+
+// AuditEntry represents one immutable audit log record.
+type AuditEntry struct {
+	ID        string    `json:"id"`
+	UserID    string    `json:"user_id"`
+	Username  string    `json:"username"`
+	Action    string    `json:"action"`
+	Resource  string    `json:"resource"`
+	Detail    string    `json:"detail"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // Repo represents a repository record.
@@ -91,12 +103,13 @@ func Open(dbType, dsn string) (*DB, error) {
 }
 
 func (d *DB) migrate() error {
-	var repoTable, pkgTable, userTable, apiKeyTable string
+	var repoTable, pkgTable, userTable, apiKeyTable, auditLogTable string
 	if d.dbType == "mysql" {
 		userTable = `
 		CREATE TABLE IF NOT EXISTS users (
 			id            VARCHAR(36) PRIMARY KEY,
 			username      VARCHAR(255) UNIQUE NOT NULL,
+			role          VARCHAR(32) NOT NULL DEFAULT 'viewer',
 			password_hash VARCHAR(255) NOT NULL,
 			created_at    DATETIME NOT NULL
 		);`
@@ -136,11 +149,24 @@ func (d *DB) migrate() error {
 			last_used   DATETIME,
 			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 		);`
+		auditLogTable = `
+		CREATE TABLE IF NOT EXISTS audit_log (
+			id          VARCHAR(36) PRIMARY KEY,
+			user_id     VARCHAR(36) NOT NULL,
+			username    VARCHAR(255) NOT NULL,
+			action      VARCHAR(64) NOT NULL,
+			resource    VARCHAR(255) NOT NULL,
+			detail      TEXT,
+			created_at  DATETIME NOT NULL,
+			INDEX idx_audit_created (created_at),
+			INDEX idx_audit_user (user_id)
+		);`
 	} else {
 		userTable = `
 		CREATE TABLE IF NOT EXISTS users (
 			id            TEXT PRIMARY KEY,
 			username      TEXT UNIQUE NOT NULL,
+			role          TEXT NOT NULL DEFAULT 'viewer',
 			password_hash TEXT NOT NULL,
 			created_at    DATETIME NOT NULL
 		);`
@@ -177,6 +203,16 @@ func (d *DB) migrate() error {
 			created_at  DATETIME NOT NULL,
 			last_used   DATETIME
 		);`
+		auditLogTable = `
+		CREATE TABLE IF NOT EXISTS audit_log (
+			id          TEXT PRIMARY KEY,
+			user_id     TEXT NOT NULL,
+			username    TEXT NOT NULL,
+			action      TEXT NOT NULL,
+			resource    TEXT NOT NULL,
+			detail      TEXT,
+			created_at  DATETIME NOT NULL
+		);`
 	}
 
 	if _, err := d.db.Exec(userTable); err != nil {
@@ -191,20 +227,82 @@ func (d *DB) migrate() error {
 	if _, err := d.db.Exec(apiKeyTable); err != nil {
 		return err
 	}
+	if _, err := d.db.Exec(auditLogTable); err != nil {
+		return err
+	}
+	if err := d.ensureUserRoleColumn(); err != nil {
+		return err
+	}
 	if d.dbType == "sqlite" {
 		if _, err := d.db.Exec(`CREATE INDEX IF NOT EXISTS idx_packages_repo ON packages(repo_id);`); err != nil {
+			return err
+		}
+		if _, err := d.db.Exec(`CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at);`); err != nil {
+			return err
+		}
+		if _, err := d.db.Exec(`CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log(user_id);`); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
+func (d *DB) ensureUserRoleColumn() error {
+	exists, err := d.columnExists("users", "role")
+	if err != nil {
+		return err
+	}
+	if exists {
+		return nil
+	}
+	roleType := "TEXT"
+	if d.dbType == "mysql" {
+		roleType = "VARCHAR(32)"
+	}
+	if _, err := d.db.Exec(`ALTER TABLE users ADD COLUMN role ` + roleType + ` NOT NULL DEFAULT 'viewer'`); err != nil {
+		return err
+	}
+	_, err = d.db.Exec(`UPDATE users SET role=?`, "admin")
+	return err
+}
+
+func (d *DB) columnExists(table, column string) (bool, error) {
+	var rows *sql.Rows
+	var err error
+	if d.dbType == "mysql" {
+		rows, err = d.db.Query(`SHOW COLUMNS FROM `+table+` LIKE ?`, column)
+	} else {
+		rows, err = d.db.Query(`PRAGMA table_info(` + table + `)`)
+	}
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	if d.dbType == "mysql" {
+		return rows.Next(), rows.Err()
+	}
+	for rows.Next() {
+		var cid int
+		var name, colType string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &defaultValue, &pk); err != nil {
+			return false, err
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
+}
+
 // GetUserByUsername retrieves a user by their username.
 func (d *DB) GetUserByUsername(username string) (*User, error) {
 	u := &User{}
 	err := d.db.QueryRow(
-		`SELECT id, username, password_hash, created_at FROM users WHERE username=?`, username,
-	).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.CreatedAt)
+		`SELECT id, username, role, password_hash, created_at FROM users WHERE username=?`, username,
+	).Scan(&u.ID, &u.Username, &u.Role, &u.PasswordHash, &u.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -212,21 +310,70 @@ func (d *DB) GetUserByUsername(username string) (*User, error) {
 }
 
 // CreateUser inserts a new user.
-func (d *DB) CreateUser(username, passwordHash string) (*User, error) {
+func (d *DB) CreateUser(username, passwordHash, role string) (*User, error) {
 	u := &User{
 		ID:           uuid.NewString(),
 		Username:     username,
+		Role:         role,
 		PasswordHash: passwordHash,
 		CreatedAt:    time.Now().UTC(),
 	}
 	_, err := d.db.Exec(
-		`INSERT INTO users (id, username, password_hash, created_at) VALUES (?,?,?,?)`,
-		u.ID, u.Username, u.PasswordHash, u.CreatedAt,
+		`INSERT INTO users (id, username, role, password_hash, created_at) VALUES (?,?,?,?,?)`,
+		u.ID, u.Username, u.Role, u.PasswordHash, u.CreatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create user: %w", err)
 	}
 	return u, nil
+}
+
+// ListUsers returns all users ordered by creation time.
+func (d *DB) ListUsers() ([]User, error) {
+	rows, err := d.db.Query(`SELECT id, username, role, created_at FROM users ORDER BY created_at`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var users []User
+	for rows.Next() {
+		var u User
+		if err := rows.Scan(&u.ID, &u.Username, &u.Role, &u.CreatedAt); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
+}
+
+// GetUserByID retrieves a user by ID.
+func (d *DB) GetUserByID(id string) (*User, error) {
+	u := &User{}
+	err := d.db.QueryRow(
+		`SELECT id, username, role, password_hash, created_at FROM users WHERE id=?`, id,
+	).Scan(&u.ID, &u.Username, &u.Role, &u.PasswordHash, &u.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return u, err
+}
+
+// UpdateUserRole updates a user's role.
+func (d *DB) UpdateUserRole(id, role string) error {
+	_, err := d.db.Exec(`UPDATE users SET role=? WHERE id=?`, role, id)
+	return err
+}
+
+// UpdateUserPassword updates a user's password hash.
+func (d *DB) UpdateUserPassword(id, passwordHash string) error {
+	_, err := d.db.Exec(`UPDATE users SET password_hash=? WHERE id=?`, passwordHash, id)
+	return err
+}
+
+// DeleteUser removes a user and cascades their API keys.
+func (d *DB) DeleteUser(id string) error {
+	_, err := d.db.Exec(`DELETE FROM users WHERE id=?`, id)
+	return err
 }
 
 // CreateRepo inserts a new repo and returns it.
@@ -486,4 +633,65 @@ func (d *DB) GetAPIKeyByPrefix(prefix string) ([]APIKey, error) {
 func (d *DB) UpdateAPIKeyLastUsed(id string) error {
 	_, err := d.db.Exec(`UPDATE api_keys SET last_used=? WHERE id=?`, time.Now().UTC(), id)
 	return err
+}
+
+// AddAuditEntry inserts an audit log entry.
+func (d *DB) AddAuditEntry(userID, username, action, resource, detail string) error {
+	_, err := d.db.Exec(
+		`INSERT INTO audit_log (id, user_id, username, action, resource, detail, created_at) VALUES (?,?,?,?,?,?,?)`,
+		uuid.NewString(), userID, username, action, resource, detail, time.Now().UTC(),
+	)
+	return err
+}
+
+// ListAuditLog returns audit entries ordered newest first.
+func (d *DB) ListAuditLog(limit, offset int) ([]AuditEntry, error) {
+	rows, err := d.db.Query(
+		`SELECT id, user_id, username, action, resource, COALESCE(detail, ''), created_at
+		 FROM audit_log ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+		limit, offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanAuditEntries(rows)
+}
+
+// ListAuditLogByUser returns audit entries for one user ordered newest first.
+func (d *DB) ListAuditLogByUser(userID string, limit, offset int) ([]AuditEntry, error) {
+	rows, err := d.db.Query(
+		`SELECT id, user_id, username, action, resource, COALESCE(detail, ''), created_at
+		 FROM audit_log WHERE user_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+		userID, limit, offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanAuditEntries(rows)
+}
+
+// CountAuditLog returns the number of audit entries, optionally filtered by user.
+func (d *DB) CountAuditLog(userID string) (int, error) {
+	var count int
+	var err error
+	if userID == "" {
+		err = d.db.QueryRow(`SELECT COUNT(*) FROM audit_log`).Scan(&count)
+	} else {
+		err = d.db.QueryRow(`SELECT COUNT(*) FROM audit_log WHERE user_id=?`, userID).Scan(&count)
+	}
+	return count, err
+}
+
+func scanAuditEntries(rows *sql.Rows) ([]AuditEntry, error) {
+	var entries []AuditEntry
+	for rows.Next() {
+		var e AuditEntry
+		if err := rows.Scan(&e.ID, &e.UserID, &e.Username, &e.Action, &e.Resource, &e.Detail, &e.CreatedAt); err != nil {
+			return nil, err
+		}
+		entries = append(entries, e)
+	}
+	return entries, rows.Err()
 }

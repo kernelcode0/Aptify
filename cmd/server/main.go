@@ -68,7 +68,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("failed to hash password: %v", err)
 		}
-		if _, err := db.CreateUser(adminUser, string(hash)); err != nil {
+		if _, err := db.CreateUser(adminUser, string(hash), "admin"); err != nil {
 			log.Fatalf("failed to create admin user: %v", err)
 		}
 		log.Printf("Created default admin user: %s", adminUser)

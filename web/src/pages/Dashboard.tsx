@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { api, getToken, type Repo } from '../api'
+import { Link, useNavigate, useOutletContext } from 'react-router-dom'
+import { api, getToken, type CurrentUser, type Repo } from '../api'
 import './Dashboard.css'
 
 function PlusIcon() {
@@ -58,6 +58,7 @@ function AlertIcon() {
 }
 
 export default function Dashboard() {
+  const { user } = useOutletContext<{ user: CurrentUser | null }>()
   const [repos, setRepos] = useState<Repo[]>([])
   const [loading, setLoading] = useState(true)
   const [showNew, setShowNew] = useState(false)
@@ -124,10 +125,12 @@ export default function Dashboard() {
             <KeyIcon />
             Export GPG Key
           </button>
-          <button className="primary" onClick={() => setShowNew(true)}>
-            <PlusIcon />
-            New Repository
-          </button>
+          {user?.role === 'admin' && (
+            <button className="primary" onClick={() => setShowNew(true)}>
+              <PlusIcon />
+              New Repository
+            </button>
+          )}
         </div>
       </div>
 

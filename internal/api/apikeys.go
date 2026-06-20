@@ -55,6 +55,8 @@ func (h *Handler) createAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	detail, _ := json.Marshal(map[string]string{"prefix": key.Prefix})
+	h.audit(currentUser(r), "create_api_key", "apikey:"+key.Name, string(detail))
 	// Return the raw key exactly once — it is never stored or returned again.
 	jsonOK(w, map[string]any{
 		"id":         key.ID,
@@ -95,5 +97,6 @@ func (h *Handler) deleteAPIKey(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "db error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	h.audit(currentUser(r), "delete_api_key", "apikey:"+keyID, "")
 	w.WriteHeader(http.StatusNoContent)
 }

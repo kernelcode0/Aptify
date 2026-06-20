@@ -91,7 +91,7 @@ button.danger {
 }
 button.danger:hover { background: var(--danger-subtle); border-color: rgba(251, 113, 133, 0.35); }
 
-input, textarea {
+input, textarea, select {
   width: 100%;
   background: #11151d;
   border: 1px solid var(--border);
@@ -102,7 +102,10 @@ input, textarea {
   padding: 10px 12px;
   transition: border-color 0.16s, box-shadow 0.16s, background 0.16s;
 }
-input:focus, textarea:focus {
+select {
+  appearance: none;
+}
+input:focus, textarea:focus, select:focus {
   outline: none;
   background: #121922;
   border-color: var(--accent-strong);

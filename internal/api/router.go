@@ -21,6 +21,7 @@ import (
 type ctxKey int
 
 const ctxUserID ctxKey = 0
+const ctxUser ctxKey = 1
 
 // Handler holds all API dependencies.
 type Handler struct {
@@ -59,15 +60,20 @@ func (h *Handler) Router(spa http.Handler) http.Handler {
 		r.Post("/api/auth/keys", h.createAPIKey)
 		r.Get("/api/auth/keys", h.listAPIKeys)
 		r.Delete("/api/auth/keys/{keyID}", h.deleteAPIKey)
-		r.Post("/api/repos", h.createRepo)
+		r.With(RequireRole("admin")).Post("/api/repos", h.createRepo)
 		r.Get("/api/repos", h.listRepos)
-		r.Put("/api/repos/{id}", h.updateRepo)
-		r.Delete("/api/repos/{id}", h.deleteRepo)
-		r.Post("/api/repos/{id}/packages", h.uploadPackage)
+		r.With(RequireRole("admin")).Put("/api/repos/{id}", h.updateRepo)
+		r.With(RequireRole("admin")).Delete("/api/repos/{id}", h.deleteRepo)
+		r.With(RequireRole("admin", "member")).Post("/api/repos/{id}/packages", h.uploadPackage)
 		r.Get("/api/repos/{id}/packages", h.listPackages)
-		r.Delete("/api/repos/{id}/packages/{pkgID}", h.deletePackage)
+		r.With(RequireRole("admin", "member")).Delete("/api/repos/{id}/packages/{pkgID}", h.deletePackage)
 		r.Get("/api/repos/{id}/setup", h.getSetup)
 		r.Get("/api/repos/{id}/status", h.getRepoStatus)
+		r.With(RequireRole("admin")).Get("/api/users", h.listUsers)
+		r.With(RequireRole("admin")).Post("/api/users", h.createUser)
+		r.With(RequireRole("admin")).Put("/api/users/{id}", h.updateUser)
+		r.With(RequireRole("admin")).Delete("/api/users/{id}", h.deleteUser)
+		r.With(RequireRole("admin")).Get("/api/audit", h.listAuditLog)
 		r.Get("/api/system/gpg-key", h.exportGPGKey)
 	})
 
@@ -95,7 +101,13 @@ func (h *Handler) authMiddleware(next http.Handler) http.Handler {
 				return
 			}
 			userID, _ := claims["sub"].(string)
-			ctx := context.WithValue(r.Context(), ctxUserID, userID)
+			user, err := h.db.GetUserByID(userID)
+			if err != nil || user == nil {
+				jsonError(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+			ctx := context.WithValue(r.Context(), ctxUserID, user.ID)
+			ctx = context.WithValue(ctx, ctxUser, user)
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
@@ -108,7 +120,13 @@ func (h *Handler) authMiddleware(next http.Handler) http.Handler {
 				for _, k := range candidates {
 					if bcrypt.CompareHashAndPassword([]byte(k.KeyHash), []byte(tokenStr)) == nil {
 						_ = h.db.UpdateAPIKeyLastUsed(k.ID)
-						ctx := context.WithValue(r.Context(), ctxUserID, k.UserID)
+						user, err := h.db.GetUserByID(k.UserID)
+						if err != nil || user == nil {
+							jsonError(w, "Unauthorized", http.StatusUnauthorized)
+							return
+						}
+						ctx := context.WithValue(r.Context(), ctxUserID, user.ID)
+						ctx = context.WithValue(ctx, ctxUser, user)
 						next.ServeHTTP(w, r.WithContext(ctx))
 						return
 					}

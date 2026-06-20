@@ -67,6 +67,7 @@ func (h *Handler) createRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.audit(currentUser(r), "create_repo", "repo:"+repo.Slug, "")
 	jsonOK(w, repo, http.StatusCreated)
 }
 
@@ -97,6 +98,7 @@ func (h *Handler) deleteRepo(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "repo deleted but file cleanup failed", http.StatusInternalServerError)
 		return
 	}
+	h.audit(currentUser(r), "delete_repo", "repo:"+repo.Slug, "")
 	w.WriteHeader(http.StatusNoContent)
 }
 

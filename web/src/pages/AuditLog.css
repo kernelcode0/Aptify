@@ -1,0 +1,21 @@
+.audit-table td {
+  vertical-align: top;
+}
+
+.audit-detail {
+  margin: 0;
+  padding: 8px 10px;
+  max-width: 360px;
+  white-space: pre-wrap;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.audit-raw {
+  display: inline-block;
+  max-width: 360px;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+  font-family: var(--mono);
+  font-size: 11px;
+}

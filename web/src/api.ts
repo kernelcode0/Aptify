@@ -25,6 +25,9 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
       window.location.href = '/login'
     }
     const err = await res.json().catch(() => ({ error: res.statusText }))
+    if (res.status === 403) {
+      throw new Error('You do not have permission to perform this action.')
+    }
     throw new Error(err.error ?? res.statusText)
   }
   if (res.status === 204) return undefined as unknown as T
@@ -84,8 +87,39 @@ export interface RepoStatus {
   last_indexed: string | null
 }
 
+export type Role = 'admin' | 'member' | 'viewer'
+
+export interface CurrentUser {
+  valid: boolean
+  user_id: string
+  username: string
+  role: Role
+}
+
+export interface User {
+  id: string
+  username: string
+  role: Role
+  created_at: string
+}
+
+export interface AuditEntry {
+  id: string
+  user_id: string
+  username: string
+  action: string
+  resource: string
+  detail: string
+  created_at: string
+}
+
+export interface AuditList {
+  total: number
+  entries: AuditEntry[]
+}
+
 export const api = {
-  checkAuth: () => req<{ authenticated: boolean }>('GET', '/api/auth/check'),
+  checkAuth: () => req<CurrentUser>('GET', '/api/auth/check'),
   login: (username: string, password: string) => req<{ token: string }>('POST', '/api/auth/login', { username, password }),
   listRepos: () => req<Repo[]>('GET', '/api/repos'),
   createRepo: (slug: string, name: string, codename: string) =>
@@ -114,6 +148,9 @@ export const api = {
         window.location.href = '/login'
       }
       const err = await res.json().catch(() => ({ error: res.statusText }))
+      if (res.status === 403) {
+        throw new Error('You do not have permission to perform this action.')
+      }
       throw new Error(err.error ?? res.statusText)
     }
     return res.json() as Promise<Package>
@@ -121,4 +158,12 @@ export const api = {
   listAPIKeys: () => req<APIKey[]>('GET', '/api/auth/keys'),
   createAPIKey: (name: string) => req<APIKeyCreated>('POST', '/api/auth/keys', { name }),
   deleteAPIKey: (id: string) => req<void>('DELETE', `/api/auth/keys/${id}`),
+  listUsers: () => req<User[]>('GET', '/api/users'),
+  createUser: (username: string, password: string, role: Role) =>
+    req<User>('POST', '/api/users', { username, password, role }),
+  updateUser: (id: string, data: { role?: Role; password?: string }) =>
+    req<User>('PUT', `/api/users/${id}`, data),
+  deleteUser: (id: string) => req<void>('DELETE', `/api/users/${id}`),
+  listAudit: (offset: number = 0, limit: number = 50) =>
+    req<AuditList>('GET', `/api/audit?offset=${offset}&limit=${limit}`),
 }
