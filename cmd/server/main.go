@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"log"
 	"net/http"
 	"os"
@@ -13,6 +15,10 @@ import (
 	"github.com/kernelcode0/aptify/internal/web"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// version is injected at build time via -ldflags "-X main.version=vX.Y.Z".
+// It defaults to "dev" for local builds.
+var version = "dev"
 
 func main() {
 	dataDir := os.Getenv("DATA_DIR")
@@ -89,10 +95,18 @@ func main() {
 
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
-		jwtSecret = "super_secret_jwt_string_change_me" // Fallback if missing
+		// Auto-generate a random secret so the binary is secure out of the box.
+		// The tradeoff: tokens are invalidated on every restart because the secret
+		// is ephemeral. Set JWT_SECRET in the environment for persistent sessions.
+		raw := make([]byte, 32)
+		if _, err := rand.Read(raw); err != nil {
+			log.Fatalf("failed to generate JWT secret: %v", err)
+		}
+		jwtSecret = base64.StdEncoding.EncodeToString(raw)
+		log.Printf("WARNING: JWT_SECRET not set — using a random secret. All tokens will be invalidated on restart.")
 	}
 
-	handler := api.New(db, fs, gen, signer, jwtSecret)
+	handler := api.New(db, fs, gen, signer, jwtSecret, version)
 
 	spa := web.Handler()
 	r := handler.Router(spa)

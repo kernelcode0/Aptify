@@ -22,11 +22,12 @@ type Handler struct {
 	gen       *index.Generator
 	signer    *signing.Signer
 	jwtSecret string
+	version   string
 	indexMu   sync.Mutex
 }
 
-func New(db *storage.DB, fs *storage.FileStore, gen *index.Generator, signer *signing.Signer, jwtSecret string) *Handler {
-	return &Handler{db: db, fs: fs, gen: gen, signer: signer, jwtSecret: jwtSecret}
+func New(db *storage.DB, fs *storage.FileStore, gen *index.Generator, signer *signing.Signer, jwtSecret, version string) *Handler {
+	return &Handler{db: db, fs: fs, gen: gen, signer: signer, jwtSecret: jwtSecret, version: version}
 }
 
 func (h *Handler) Router(spa http.Handler) http.Handler {
@@ -34,7 +35,8 @@ func (h *Handler) Router(spa http.Handler) http.Handler {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	// Public APT endpoints — no auth.
+	// Public endpoints — no auth.
+	r.Get("/health", h.health)
 	r.Get("/signing-key.asc", h.servePublicKey)
 	r.Get("/repo/{slug}/dists/*", h.serveRepoFile)
 	r.Get("/repo/{slug}/pool/*", h.serveRepoFile)
