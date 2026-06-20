@@ -23,8 +23,8 @@ import (
 )
 
 // version is injected at build time via -ldflags "-X main.version=vX.Y.Z".
-// It defaults to "v1.0.9" for local builds.
-var version = "v1.0.9"
+// It defaults to "v1.1.0" for local builds.
+var version = "v1.1.0"
 
 // knownWeakPasswords is an explicit blocklist of credentials that must never
 // be accepted in production. Fail fast if an operator forgets to rotate them.

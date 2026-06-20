@@ -134,7 +134,7 @@ func TestLoginCreatesOneReusableAPIKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	handler := aptifyapi.New(db, nil, nil, nil, "integration_test_jwt_secret_32_chars", "v1.0.9", nil)
+	handler := aptifyapi.New(db, nil, nil, nil, "integration_test_jwt_secret_32_chars", "v1.1.0", nil)
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		t.Fatal(err)
