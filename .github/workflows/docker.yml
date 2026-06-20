@@ -11,6 +11,10 @@ env:
   # github.repository as <account>/<repo>
   IMAGE_NAME: ${{ github.repository }}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
@@ -29,6 +33,35 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
+      - name: Verify version metadata
+        run: bash scripts/check-version.sh
+
+      - name: Determine image version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            version="pr-${{ github.event.number }}"
+            latest=false
+          elif [[ "${{ github.ref_type }}" == "tag" ]]; then
+            version="${{ github.ref_name }}"
+            if [[ "$version" == *-* ]]; then
+              latest=false
+            else
+              latest=true
+            fi
+          else
+            version="$(tr -d '[:space:]' < VERSION)"
+            if [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
+              version="${version}-develop"
+              latest=false
+            else
+              latest=true
+            fi
+          fi
+          echo "tag=$version" >> "$GITHUB_OUTPUT"
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+
       # Set up Buildx for multi-architecture builds
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
@@ -46,17 +79,15 @@ jobs:
         id: meta
         uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5.7.0
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/aptify
+          # Do not build the image name from a secret: secrets are unavailable
+          # to Dependabot and fork PRs, which previously produced "/aptify".
+          images: ${{ env.IMAGE_NAME }}
           flavor: |
             latest=false
           tags: |
             type=ref,event=pr
-            type=raw,value=${{ github.ref_name }},enable=${{ github.ref_type == 'tag' }}
-            type=raw,value=latest,enable=${{ github.ref_type == 'tag' && !contains(github.ref_name, '-') }}
-            type=raw,value=develop,enable=${{ github.ref == 'refs/heads/develop' }}
-            type=sha,prefix=develop-,enable=${{ github.ref == 'refs/heads/develop' }}
-            type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
-            type=sha,prefix=main-,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=${{ steps.version.outputs.tag }},enable=${{ github.event_name != 'pull_request' }}
+            type=raw,value=latest,enable=${{ steps.version.outputs.latest == 'true' }}
 
       # Build and push Docker image with Buildx (don't push on PR)
       - name: Build and push Docker image
@@ -64,9 +95,10 @@ jobs:
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
+          load: ${{ github.event_name == 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VERSION=${{ steps.meta.outputs.version }}
+            VERSION=${{ steps.version.outputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

@@ -15,7 +15,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=frontend /app/internal/web/dist ./internal/web/dist
-ARG VERSION=v1.0.6
+ARG VERSION=v1.0.9
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w -X main.version=${VERSION}" -o /aptify ./cmd/server
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w -X main.version=${VERSION}" -o /aptify-cli ./cmd/aptify-cli
 
@@ -28,9 +28,9 @@ FROM alpine:3.20
 #   wget            — used by HEALTHCHECK
 #   su-exec         — lightweight setuid helper for privilege drop in entrypoint
 RUN apk --no-cache add ca-certificates tzdata wget su-exec && \
-    # Create a dedicated non-root service account.
-    addgroup -S aptify && \
-    adduser -S aptify -G aptify -h /app -s /sbin/nologin
+  # Create a dedicated non-root service account.
+  addgroup -S aptify && \
+  adduser -S aptify -G aptify -h /app -s /sbin/nologin
 
 WORKDIR /app
 COPY --from=builder /aptify .

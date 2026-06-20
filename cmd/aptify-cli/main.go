@@ -18,7 +18,7 @@ import (
 )
 
 // version is overridden by release builds via -ldflags "-X main.version=vX.Y.Z".
-var version = "v1.0.6"
+var version = "v1.0.9"
 
 // Config is stored at ~/.config/aptify/config.json.
 type Config struct {

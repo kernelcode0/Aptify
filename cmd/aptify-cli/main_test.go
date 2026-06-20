@@ -1,17 +1,31 @@
 package main
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	aptifyapi "github.com/kernelcode0/aptify/internal/api"
+	"github.com/kernelcode0/aptify/internal/storage"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+type handlerTransport struct{ handler http.Handler }
+
+func (t handlerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	recorder := httptest.NewRecorder()
+	t.handler.ServeHTTP(recorder, r)
+	return recorder.Result(), nil
+}
 
 func TestLoginClientCarriesSessionAndOrigin(t *testing.T) {
 	const origin = "http://aptify.example"
@@ -100,5 +114,83 @@ func TestExistingLoginValidAllowsRejectedKeyToBeReplaced(t *testing.T) {
 	}
 	if valid {
 		t.Fatal("expected rejected API key to require fresh login")
+	}
+}
+
+func TestLoginCreatesOneReusableAPIKey(t *testing.T) {
+	const serverURL = "https://aptify.example"
+	db, err := storage.Open("sqlite", filepath.Join(t.TempDir(), "aptify.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	hash, err := bcrypt.GenerateFromPassword([]byte("securepassword"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	user, err := db.CreateUser("wajahat.ali", string(hash), "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	handler := aptifyapi.New(db, nil, nil, nil, "integration_test_jwt_secret_32_chars", "v1.0.9", nil)
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &http.Client{Jar: jar, Transport: handlerTransport{handler: handler.Router(http.NotFoundHandler())}}
+
+	loginBody, contentType, err := jsonBody(map[string]string{"username": "wajahat.ali", "password": "securepassword"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	login, err := apiDoWithClient(client, http.MethodPost, serverURL+"/api/auth/login", "", loginBody, contentType, serverURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer login.Body.Close()
+	if login.StatusCode != http.StatusOK {
+		t.Fatalf("login status = %d, body = %s", login.StatusCode, errBody(login))
+	}
+	_, _ = io.Copy(io.Discard, login.Body)
+
+	keyBody, contentType, err := jsonBody(map[string]string{"name": "integration-cli"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyResponse, err := apiDoWithClient(client, http.MethodPost, serverURL+"/api/auth/keys", "", keyBody, contentType, serverURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer keyResponse.Body.Close()
+	if keyResponse.StatusCode != http.StatusCreated {
+		t.Fatalf("create key status = %d, body = %s", keyResponse.StatusCode, errBody(keyResponse))
+	}
+	var created struct {
+		Key string `json:"key"`
+	}
+	if err := json.NewDecoder(keyResponse.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	if err := saveConfig(configPath, &Config{Server: serverURL, Token: created.Key}); err != nil {
+		t.Fatal(err)
+	}
+	valid, err := existingLoginValid(client, configPath, serverURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !valid {
+		t.Fatal("newly issued API key was not reusable")
+	}
+
+	keys, err := db.ListAPIKeys(user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(keys) != 1 {
+		t.Fatalf("API key count = %d, want 1", len(keys))
 	}
 }

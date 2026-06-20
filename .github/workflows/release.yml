@@ -2,8 +2,17 @@ name: Release CLI
 
 on:
   push:
+    branches:
+      - main
+    paths:
+      - VERSION
     tags:
       - 'v*'
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -20,6 +29,44 @@ jobs:
       statuses: none
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Read and validate version
+        id: version
+        shell: bash
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "VERSION must use the format vMAJOR.MINOR.PATCH; got: $version" >&2
+            exit 1
+          fi
+          if [[ "${{ github.ref_type }}" == "tag" && "${{ github.ref_name }}" != "$version" ]]; then
+            echo "Git tag ${{ github.ref_name }} does not match VERSION $version" >&2
+            exit 1
+          fi
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Verify version metadata
+        run: bash scripts/check-version.sh
+
+      - name: Create release tag when needed
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          if git rev-parse --quiet --verify "refs/tags/$VERSION" >/dev/null; then
+            tagged_commit="$(git rev-list -n 1 "$VERSION")"
+            if [[ "$tagged_commit" != "$GITHUB_SHA" ]]; then
+              echo "Tag $VERSION already points to $tagged_commit, not $GITHUB_SHA" >&2
+              exit 1
+            fi
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$VERSION" -m "Release $VERSION"
+          git push origin "$VERSION"
 
       - name: Set up Go
         uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
@@ -28,10 +75,11 @@ jobs:
           cache: true
 
       - name: Build CLI binaries
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
         run: |
           mkdir -p dist
-          VERSION=${GITHUB_REF#refs/tags/}
-          
+
           build_and_archive() {
             local os=$1
             local arch=$2
@@ -60,8 +108,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          tag_name: ${{ steps.version.outputs.value }}
           files: |
             dist/aptify-cli-*
             dist/checksums.txt
           generate_release_notes: true
-
