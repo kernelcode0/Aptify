@@ -255,7 +255,7 @@ func TestClearAuditLogExcept(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// 2. Insert some dummy audit logs
-	db.AddAuditEntry("user1", "admin", "create_repo", "repo", "repo created")
+	db.LogAuditWithID("user1", "admin", "create_repo", "repo", "repo created")
 
 	// Verify we have entries (login + create_repo)
 	total, err := db.CountAuditLog("")
@@ -286,4 +286,3 @@ func TestClearAuditLogExcept(t *testing.T) {
 		t.Errorf("Expected remaining log to be clear_audit_log marker, got: %v", entries)
 	}
 }
-

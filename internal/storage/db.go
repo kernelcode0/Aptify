@@ -623,9 +623,9 @@ func (d *DB) ClearAuditLogExcept(ctx context.Context, keepEventID string) error 
 func (d *DB) LogAuditWithID(userID, username, action, resource, detail string) (string, error) {
 	id := uuid.NewString()
 	_, err := d.db.Exec(`
-		INSERT INTO audit_log (id, user_id, username, action, resource, detail)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, id, userID, username, action, resource, detail)
+		INSERT INTO audit_log (id, user_id, username, action, resource, detail, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, id, userID, username, action, resource, detail, time.Now().UTC())
 	return id, err
 }
 

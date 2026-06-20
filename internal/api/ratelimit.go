@@ -3,6 +3,8 @@ package api
 import (
 	"net"
 	"net/http"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -43,15 +45,28 @@ func (rl *rateLimiter) RateLimit(next http.Handler) http.Handler {
 			ip = r.RemoteAddr
 		}
 
+		attemptsStr := os.Getenv("LOGIN_RATE_LIMIT_ATTEMPTS")
+		windowStr := os.Getenv("LOGIN_RATE_LIMIT_WINDOW_SECONDS")
+		
+		maxAttempts := 5
+		if a, err := strconv.Atoi(attemptsStr); err == nil && a > 0 {
+			maxAttempts = a
+		}
+		
+		windowSecs := 60
+		if w, err := strconv.Atoi(windowStr); err == nil && w > 0 {
+			windowSecs = w
+		}
+
 		rl.mu.Lock()
 		client, exists := rl.clients[ip]
 		if !exists {
-			client = &clientData{tokens: 5, last: time.Now()}
+			client = &clientData{tokens: maxAttempts, last: time.Now()}
 			rl.clients[ip] = client
 		}
 
-		if time.Since(client.last) > time.Minute {
-			client.tokens = 5
+		if time.Since(client.last) > time.Duration(windowSecs)*time.Second {
+			client.tokens = maxAttempts
 		}
 		client.last = time.Now()
 

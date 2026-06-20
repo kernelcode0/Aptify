@@ -56,7 +56,7 @@ func (h *Handler) clearAuditLog(w http.ResponseWriter, r *http.Request) {
 	user := r.Context().Value(ctxUser).(*storage.User)
 
 	// Forensic Marker Strategy: Insert a clear event FIRST, then delete all other events EXCEPT the new clear event.
-	clearEventID, err := h.db.LogAuditWithID(user.ID, user.Username, "CLEAR", "audit_log", "Audit log truncated by admin")
+	clearEventID, err := h.db.LogAuditWithID(user.ID, user.Username, "clear_audit_log", "audit_log", "Audit log truncated by admin")
 	if err != nil {
 		jsonError(w, "Failed to create forensic marker", http.StatusInternalServerError)
 		return
@@ -68,5 +68,5 @@ func (h *Handler) clearAuditLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonOK(w, map[string]string{"status": "ok"}, http.StatusOK)
+	w.WriteHeader(http.StatusNoContent)
 }
