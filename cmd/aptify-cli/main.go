@@ -18,7 +18,7 @@ import (
 )
 
 // version is overridden by release builds via -ldflags "-X main.version=vX.Y.Z".
-var version = "v1.0.5"
+var version = "v1.0.6"
 
 // Config is stored at ~/.config/aptify/config.json.
 type Config struct {
@@ -143,6 +143,44 @@ func errBody(resp *http.Response) string {
 	return strings.TrimSpace(string(b))
 }
 
+func normalizeServerURL(serverURL string) string {
+	serverURL = strings.TrimRight(strings.TrimSpace(serverURL), "/")
+	if serverURL != "" && !strings.HasPrefix(serverURL, "http://") && !strings.HasPrefix(serverURL, "https://") {
+		serverURL = "https://" + serverURL
+	}
+	return serverURL
+}
+
+// existingLoginValid checks whether the config already contains a working API
+// key for this server. A rejected key permits a fresh login; connectivity and
+// unexpected server errors are returned so login cannot accidentally mint a
+// duplicate key when validation was inconclusive.
+func existingLoginValid(client *http.Client, configPath, serverURL string) (bool, error) {
+	cfg, err := loadConfig(configPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("read config: %w", err)
+	}
+	if normalizeServerURL(cfg.Server) != normalizeServerURL(serverURL) || cfg.Token == "" {
+		return false, nil
+	}
+
+	resp, err := apiDoWithClient(client, http.MethodGet, normalizeServerURL(serverURL)+"/api/auth/check", cfg.Token, nil, "", "")
+	if err != nil {
+		return false, fmt.Errorf("verify saved API key: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusOK {
+		return true, nil
+	}
+	if resp.StatusCode == http.StatusUnauthorized {
+		return false, nil
+	}
+	return false, fmt.Errorf("verify saved API key: server returned %s: %s", resp.Status, errBody(resp))
+}
+
 // ---- commands ---------------------------------------------------------------
 
 func runLogin(args []string) {
@@ -155,9 +193,16 @@ func runLogin(args []string) {
 		fmt.Fprintln(os.Stderr, "usage: aptify-cli login <server-url>")
 		os.Exit(1)
 	}
-	serverURL = strings.TrimRight(serverURL, "/")
-	if !strings.HasPrefix(serverURL, "http://") && !strings.HasPrefix(serverURL, "https://") {
-		serverURL = "https://" + serverURL
+	serverURL = normalizeServerURL(serverURL)
+
+	alreadyLoggedIn, err := existingLoginValid(http.DefaultClient, opts.configPath, serverURL)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "login check failed:", err)
+		os.Exit(1)
+	}
+	if alreadyLoggedIn {
+		fmt.Printf("Already logged in to %s. Using the saved API key.\n", serverURL)
+		return
 	}
 
 	fmt.Print("Username: ")
