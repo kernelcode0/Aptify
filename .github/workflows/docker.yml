@@ -3,6 +3,7 @@ name: Docker Image CI/CD
 on:
   push:
     branches: [ "main", "develop" ]
+    tags: [ "v*" ]
   pull_request:
     branches: [ "main", "develop" ]
 
@@ -14,9 +15,7 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
-      # contents:write is required by mathieudutour/github-tag-action to push tags.
-      # All other permissions are explicitly restricted.
-      contents: write
+      contents: read
       packages: write
       # Restrict unused permissions.
       actions: none
@@ -42,25 +41,22 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Bump version and create git tag
-      - name: Bump version and push tag
-        id: tag_version
-        if: github.event_name != 'pull_request'
-        uses: mathieudutour/github-tag-action@d28fa2ccfbd16e871a4bdf35e11b3ad1bd56c0c1 # v6.2
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          default_bump: patch
-
       # Extract metadata (tags, labels) for Docker
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5.7.0
         with:
           images: ${{ secrets.DOCKERHUB_USERNAME }}/aptify
+          flavor: |
+            latest=false
           tags: |
             type=ref,event=pr
-            type=raw,value=${{ steps.tag_version.outputs.new_version }},enable=${{ github.event_name != 'pull_request' }}
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ github.ref_name }},enable=${{ github.ref_type == 'tag' }}
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' && !contains(github.ref_name, '-') }}
+            type=raw,value=develop,enable=${{ github.ref == 'refs/heads/develop' }}
+            type=sha,prefix=develop-,enable=${{ github.ref == 'refs/heads/develop' }}
+            type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,prefix=main-,enable=${{ github.ref == 'refs/heads/main' }}
 
       # Build and push Docker image with Buildx (don't push on PR)
       - name: Build and push Docker image
@@ -70,5 +66,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
