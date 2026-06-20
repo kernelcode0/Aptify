@@ -93,21 +93,26 @@ button.danger:hover { background: var(--danger-subtle); border-color: rgba(251, 
 
 input, textarea, select {
   width: 100%;
-  background: #11151d;
+  background-color: #11151d;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text);
   font-family: inherit;
   font-size: 14px;
   padding: 10px 12px;
-  transition: border-color 0.16s, box-shadow 0.16s, background 0.16s;
+  transition: border-color 0.16s, box-shadow 0.16s, background-color 0.16s;
 }
 select {
   appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237d8897' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 14px;
+  padding-right: 36px;
 }
 input:focus, textarea:focus, select:focus {
   outline: none;
-  background: #121922;
+  background-color: #121922;
   border-color: var(--accent-strong);
   box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.12);
 }
