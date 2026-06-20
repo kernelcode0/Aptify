@@ -10,6 +10,10 @@ on:
       - 'v*'
   workflow_dispatch:
 
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -42,6 +46,9 @@ jobs:
             exit 1
           fi
           echo "value=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Verify version metadata
+        run: bash scripts/check-version.sh
 
       - name: Create release tag when needed
         shell: bash

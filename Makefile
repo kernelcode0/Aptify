@@ -1,7 +1,10 @@
 VERSION := $(shell tr -d '[:space:]' < VERSION)
 VERSION_LDFLAGS := -s -w -X main.version=$(VERSION)
 
-.PHONY: build build-cli ui dev clean
+.PHONY: build build-cli check-version ui dev clean
+
+check-version:
+	bash scripts/check-version.sh
 
 ui:
 	cd web && npm run build
