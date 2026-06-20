@@ -1,4 +1,0 @@
-2026/06/20 14:06:06 Created default admin user: admin
-2026/06/20 14:06:08 WARNING: JWT_SECRET not set — using a random secret. All tokens will be invalidated on restart.
-2026/06/20 14:06:08 Starting Aptify server on :8080
-2026/06/20 14:06:08 server error: listen tcp :8080: bind: address already in use
