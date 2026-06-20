@@ -171,4 +171,5 @@ export const api = {
   deleteUser: (id: string) => req<void>('DELETE', `/api/users/${id}`),
   listAudit: (offset: number = 0, limit: number = 50) =>
     req<AuditList>('GET', `/api/audit?offset=${offset}&limit=${limit}`),
+  clearAudit: () => req<void>('DELETE', '/api/audit'),
 }

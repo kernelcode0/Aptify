@@ -76,6 +76,7 @@ func (h *Handler) Router(spa http.Handler) http.Handler {
 		r.With(RequireRole("admin")).Put("/api/users/{id}", h.updateUser)
 		r.With(RequireRole("admin")).Delete("/api/users/{id}", h.deleteUser)
 		r.With(RequireRole("admin")).Get("/api/audit", h.listAuditLog)
+		r.With(RequireRole("admin")).Delete("/api/audit", h.clearAuditLog)
 		r.Get("/api/system/gpg-key", h.exportGPGKey)
 	})
 

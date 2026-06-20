@@ -1,9 +1,6 @@
 .dashboard { --deb: #2dd4bf; --rpm: #f59e0b; }
 .dashboard-hero { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; margin-bottom:30px; }
 .dashboard-heading { max-width:650px; }
-.page-kicker { display:flex; align-items:center; gap:6px; color:var(--accent-hover); font-size:11px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; margin-bottom:9px; }
-.page-title { font-size:34px; font-weight:820; letter-spacing:-.035em; color:var(--text); line-height:1.08; }
-.page-sub { color:var(--muted); font-size:14px; margin-top:9px; max-width:580px; }
 .hero-primary { min-height:40px; padding-inline:16px; }
 
 .metrics { display:grid; grid-template-columns:1.35fr 1fr 1fr; gap:12px; margin-bottom:30px; }

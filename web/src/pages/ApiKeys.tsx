@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { api, type APIKey, type APIKeyCreated, type CurrentUser } from '../api'
 import './ApiKeys.css'
@@ -48,6 +48,10 @@ function KeyIcon() {
   )
 }
 
+function ShieldIcon() {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>
+}
+
 export default function ApiKeys() {
   const { user } = useOutletContext<{ user: CurrentUser | null }>()
   const [keys, setKeys] = useState<APIKey[]>([])
@@ -58,6 +62,7 @@ export default function ApiKeys() {
   const [creating, setCreating] = useState(false)
   const [newKey, setNewKey] = useState<APIKeyCreated | null>(null)
   const [copied, setCopied] = useState(false)
+  const [query, setQuery] = useState('')
 
   if (user?.role === 'viewer') {
     return (
@@ -84,6 +89,13 @@ export default function ApiKeys() {
   }
 
   useEffect(load, [])
+
+  const visibleKeys = useMemo(() => {
+    const term = query.trim().toLowerCase()
+    return term ? keys.filter(key => key.name.toLowerCase().includes(term) || key.prefix.toLowerCase().includes(term)) : keys
+  }, [keys, query])
+
+  const usedKeys = keys.filter(key => key.last_used).length
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -130,12 +142,12 @@ export default function ApiKeys() {
   }
 
   return (
-    <div>
+    <div className="api-keys-page">
       <div className="page-header">
         <div>
           <div className="page-kicker">Authentication</div>
           <h1 className="page-title">API Keys</h1>
-          <p className="page-sub">{keys.length} key{keys.length !== 1 ? 's' : ''}</p>
+          <p className="page-sub">Secure credentials for CI pipelines, deployment tools, and automation.</p>
         </div>
         <div className="page-actions">
           <button className="primary" onClick={() => setShowNew(true)}>
@@ -152,18 +164,23 @@ export default function ApiKeys() {
         </div>
       )}
 
+      {!loading && keys.length > 0 && <section className="key-overview" aria-label="API key overview">
+        <div className="key-stat key-stat-primary"><span>Total keys</span><strong>{keys.length}</strong><small>Issued credentials</small></div>
+        <div className="key-stat"><i className="used-dot" /><div><span>Used keys</span><strong>{usedKeys}</strong><small>Authenticated at least once</small></div></div>
+        <div className="key-stat"><i className="unused-dot" /><div><span>Never used</span><strong>{keys.length - usedKeys}</strong><small>Awaiting first use</small></div></div>
+      </section>}
+
       {/* New key reveal modal */}
       {newKey && (
         <div className="overlay" onClick={e => { if (e.target === e.currentTarget) { setNewKey(null) } }}>
-          <div className="modal">
+          <div className="modal key-modal" role="dialog" aria-modal="true" aria-labelledby="key-created-title">
             <div className="modal-header">
-              <h2>API Key Created</h2>
+              <div><div className="modal-kicker">Credential ready</div><h2 id="key-created-title">API key created</h2></div>
               <button className="modal-close" onClick={() => setNewKey(null)} aria-label="Close"><XIcon /></button>
             </div>
             <div className="ak-reveal">
               <div className="ak-reveal-warning">
-                <AlertIcon />
-                This key will not be shown again. Copy it now.
+                <span><AlertIcon /></span><div><strong>Copy this key now</strong><small>For your security, the secret will not be shown again.</small></div>
               </div>
               <div className="ak-reveal-key">
                 <code>{newKey.key}</code>
@@ -183,14 +200,14 @@ export default function ApiKeys() {
       {/* Create key modal */}
       {showNew && (
         <div className="overlay" onClick={e => { if (e.target === e.currentTarget) setShowNew(false) }}>
-          <div className="modal">
+          <div className="modal key-modal" role="dialog" aria-modal="true" aria-labelledby="new-key-title">
             <div className="modal-header">
-              <h2>New API Key</h2>
+              <div><div className="modal-kicker">New credential</div><h2 id="new-key-title">Create API key</h2></div>
               <button className="modal-close" onClick={() => setShowNew(false)} aria-label="Close"><XIcon /></button>
             </div>
             <form onSubmit={handleCreate} className="form-stack">
               <div className="field">
-                <label>Name</label>
+                <label>Key name</label>
                 <input
                   value={newName}
                   onChange={e => setNewName(e.target.value)}
@@ -198,8 +215,9 @@ export default function ApiKeys() {
                   required
                   autoFocus
                 />
-                <span className="field-hint">A label to identify this key (e.g. the system it's used on)</span>
+                <span className="field-hint">Use a descriptive label for the service or machine using this key.</span>
               </div>
+              <div className="key-security-note"><ShieldIcon /><span>Store the generated secret in a secure credential manager.</span></div>
               <div className="form-actions">
                 <button type="submit" className="primary" disabled={creating}>
                   {creating
@@ -217,13 +235,18 @@ export default function ApiKeys() {
       {loading ? (
         <div className="loading-center"><div className="spinner" /></div>
       ) : keys.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-icon"><KeyIcon /></div>
-          <h3>No API keys yet</h3>
-          <p>Create a key to let CI pipelines and scripts authenticate without a password.</p>
+        <div className="empty-state api-empty">
+          <div className="key-empty-visual"><span><KeyIcon /></span></div>
+          <div className="empty-eyebrow">Secure automation starts here</div><h2>No API keys yet</h2>
+          <p>Create a key to let CI pipelines and scripts authenticate without sharing your password.</p>
+          <button className="primary" onClick={() => setShowNew(true)}><PlusIcon />Create API key</button>
         </div>
       ) : (
-        <div className="package-table card">
+        <section className="keys-collection">
+          <div className="keys-collection-header"><div><h2>Issued credentials</h2><p>{visibleKeys.length === keys.length ? `${keys.length} key${keys.length === 1 ? '' : 's'}` : `${visibleKeys.length} of ${keys.length} keys`}</p></div>
+            <label className="key-search"><span className="search-symbol" aria-hidden="true" /><span className="sr-only">Search API keys</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search keys…" /></label>
+          </div>
+        <div className="package-table card keys-table">
           <table>
             <thead>
               <tr>
@@ -235,12 +258,12 @@ export default function ApiKeys() {
               </tr>
             </thead>
             <tbody>
-              {keys.map(k => (
+              {visibleKeys.map(k => (
                 <tr key={k.id}>
-                  <td><span className="pkg-name">{k.name}</span></td>
-                  <td><code className="pkg-version">{k.prefix}…</code></td>
+                  <td><div className="key-identity"><span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 8.8-8.8M15 8l2 2M17.5 5.5l2 2"/></svg></span><div><strong>{k.name}</strong><small>{k.last_used ? 'Active credential' : 'Not used yet'}</small></div></div></td>
+                  <td><code className="key-prefix">{k.prefix}…</code></td>
                   <td className="muted-text">{formatDate(k.created_at)}</td>
-                  <td className="muted-text">{k.last_used ? formatDate(k.last_used) : '—'}</td>
+                  <td>{k.last_used ? <span className="key-used"><i />{formatDate(k.last_used)}</span> : <span className="key-never">Never</span>}</td>
                   <td>
                     <button className="danger icon-btn" onClick={() => handleDelete(k)} title="Delete key">
                       <TrashIcon />
@@ -248,9 +271,11 @@ export default function ApiKeys() {
                   </td>
                 </tr>
               ))}
+              {visibleKeys.length === 0 && <tr><td colSpan={5}><div className="keys-no-results"><strong>No keys found</strong><span>Try a different name or prefix.</span><button className="ghost" onClick={() => setQuery('')}>Clear search</button></div></td></tr>}
             </tbody>
           </table>
         </div>
+        </section>
       )}
     </div>
   )

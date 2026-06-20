@@ -533,7 +533,7 @@ func (d *DB) AddPackage(p *Package) error {
 
 // ListPackages returns all packages for a repo. If limit > 0, it applies pagination.
 func (d *DB) ListPackages(repoID string, limit, offset int) ([]Package, error) {
-	query := `SELECT id, repo_id, filename, package, version, `+"`release`"+`, arch, size, sha256, sha1, md5, control_json, uploaded_at
+	query := `SELECT id, repo_id, filename, package, version, ` + "`release`" + `, arch, size, sha256, sha1, md5, control_json, uploaded_at
 		 FROM packages WHERE repo_id=? ORDER BY uploaded_at DESC`
 
 	var rows *sql.Rows
@@ -732,6 +732,12 @@ func (d *DB) CountAuditLog(userID string) (int, error) {
 		err = d.db.QueryRow(`SELECT COUNT(*) FROM audit_log WHERE user_id=?`, userID).Scan(&count)
 	}
 	return count, err
+}
+
+// ClearAuditLog permanently removes every audit log entry.
+func (d *DB) ClearAuditLog() error {
+	_, err := d.db.Exec(`DELETE FROM audit_log`)
+	return err
 }
 
 func scanAuditEntries(rows *sql.Rows) ([]AuditEntry, error) {

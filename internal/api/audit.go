@@ -51,3 +51,11 @@ func (h *Handler) listAuditLog(w http.ResponseWriter, r *http.Request) {
 		"entries": entries,
 	}, http.StatusOK)
 }
+
+func (h *Handler) clearAuditLog(w http.ResponseWriter, _ *http.Request) {
+	if err := h.db.ClearAuditLog(); err != nil {
+		jsonError(w, "db error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
