@@ -56,6 +56,7 @@ export default function Users() {
   const [error, setError] = useState('')
   const [showNew, setShowNew] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState('')
   const [newUser, setNewUser] = useState({ username: '', password: '', role: 'viewer' as Role })
   const [editing, setEditing] = useState<string | null>(null)
   const [editRole, setEditRole] = useState<Role>('viewer')
@@ -82,14 +83,14 @@ export default function Users() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     setCreating(true)
-    setError('')
+    setCreateError('')
     try {
       const created = await api.createUser(newUser.username.trim(), newUser.password, newUser.role)
       setUsers(prev => [...prev, created])
       setNewUser({ username: '', password: '', role: 'viewer' })
       setShowNew(false)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'failed to create user')
+      setCreateError(e instanceof Error ? e.message : 'failed to create user')
     } finally {
       setCreating(false)
     }
@@ -135,7 +136,7 @@ export default function Users() {
           <p className="page-sub">Manage who can access Aptify and what they can do.</p>
         </div>
         <div className="page-actions">
-          <button className="primary" onClick={() => setShowNew(true)}>
+          <button className="primary" onClick={() => { setCreateError(''); setShowNew(true) }}>
             <PlusIcon />
             Add User
           </button>
@@ -159,9 +160,11 @@ export default function Users() {
               <button className="modal-close" onClick={() => setShowNew(false)} aria-label="Close"><XIcon /></button>
             </div>
             <form onSubmit={handleCreate} className="form-stack">
+              {createError && <div className="alert-error" role="alert"><AlertIcon />{createError}</div>}
               <div className="field">
                 <label>Username</label>
-                <input value={newUser.username} onChange={e => setNewUser(f => ({ ...f, username: e.target.value }))} minLength={3} maxLength={32} required autoFocus />
+                <input value={newUser.username} onChange={e => { setCreateError(''); setNewUser(f => ({ ...f, username: e.target.value })) }} minLength={3} maxLength={32} pattern="[A-Za-z0-9_.-]{3,32}" aria-invalid={createError.toLowerCase().includes('username')} required autoFocus />
+                <span className="field-hint">3-32 characters. Letters, numbers, dots, hyphens, and underscores are allowed.</span>
               </div>
               <div className="field">
                 <label>Password</label>

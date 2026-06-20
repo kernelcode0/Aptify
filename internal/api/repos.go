@@ -56,7 +56,8 @@ func (h *Handler) createRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if existing != nil {
-		jsonError(w, "slug already exists", http.StatusConflict)
+		suggestion := req.Slug + "-" + req.Type
+		jsonError(w, fmt.Sprintf("slug %q is already used by a %s repository; repository slugs are shared across DEB and RPM, so use a unique slug such as %q", req.Slug, strings.ToUpper(existing.Type), suggestion), http.StatusConflict)
 		return
 	}
 

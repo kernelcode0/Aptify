@@ -3,7 +3,7 @@ services:
     build:
       context: .
       args:
-        VERSION: ${VERSION:-dev}
+        VERSION: ${VERSION:-v1.0.5}
     ports:
       - "8080:8080"
     volumes:

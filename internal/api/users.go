@@ -11,7 +11,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-var usernameRe = regexp.MustCompile(`^[A-Za-z0-9_-]{3,32}$`)
+var usernameRe = regexp.MustCompile(`^[A-Za-z0-9_.-]{3,32}$`)
 
 type createUserRequest struct {
 	Username string `json:"username"`
@@ -48,7 +48,7 @@ func (h *Handler) createUser(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Username = strings.TrimSpace(req.Username)
 	if !usernameRe.MatchString(req.Username) {
-		jsonError(w, "invalid username", http.StatusBadRequest)
+		jsonError(w, "username must be 3-32 characters and contain only letters, numbers, dots, hyphens, or underscores", http.StatusBadRequest)
 		return
 	}
 	if len(req.Password) < 8 {
