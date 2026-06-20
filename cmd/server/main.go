@@ -23,8 +23,8 @@ import (
 )
 
 // version is injected at build time via -ldflags "-X main.version=vX.Y.Z".
-// It defaults to "dev" for local builds.
-var version = "dev"
+// It defaults to "1.0.0" for local builds.
+var version = "1.0.0"
 
 func main() {
 	dataDir := os.Getenv("DATA_DIR")

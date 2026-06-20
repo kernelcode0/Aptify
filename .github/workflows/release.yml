@@ -1,0 +1,49 @@
+name: Release CLI
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Build CLI binaries
+        run: |
+          mkdir -p dist
+          VERSION=${GITHUB_REF#refs/tags/}
+          
+          build_and_archive() {
+            local os=$1
+            local arch=$2
+            local ext=""
+            if [ "$os" = "windows" ]; then
+              ext=".exe"
+            fi
+            
+            echo "Building for $os/$arch..."
+            GOOS=$os GOARCH=$arch go build -ldflags="-s -w -X main.version=$VERSION" -o "dist/aptify-cli-${os}-${arch}${ext}" ./cmd/aptify-cli
+          }
+          
+          build_and_archive linux amd64
+          build_and_archive linux arm64
+          build_and_archive darwin amd64
+          build_and_archive darwin arm64
+          build_and_archive windows amd64
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/aptify-cli-*
+          generate_release_notes: true
