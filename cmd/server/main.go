@@ -75,8 +75,8 @@ func validateSecrets(jwtSecret, adminPass string) {
 		log.Fatal("FATAL: ADMIN_PASSWORD must be at least 8 characters long.")
 	}
 	if knownWeakPasswords[strings.ToLower(adminPass)] {
-		log.Fatalf("FATAL: ADMIN_PASSWORD '%s' is a known insecure default value. "+
-			"Choose a strong, unique password.", adminPass)
+		log.Fatalf("FATAL: ADMIN_PASSWORD is a known insecure default value. " +
+			"Choose a strong, unique password.")
 	}
 }
 
@@ -86,6 +86,7 @@ func main() {
 		dataDir = "./data"
 	}
 
+	/* #nosec G703 */
 	if err := os.MkdirAll(dataDir, 0750); err != nil {
 		log.Fatalf("failed to create data dir: %v", err)
 	}

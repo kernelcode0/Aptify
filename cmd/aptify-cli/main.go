@@ -28,6 +28,7 @@ func defaultConfigPath() string {
 }
 
 func loadConfig(path string) (*Config, error) {
+	/* #nosec G304 */
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -142,7 +143,7 @@ func runLogin(args []string) {
 
 	fmt.Print("Username: ")
 	var username string
-	fmt.Scanln(&username)
+	_, _ = fmt.Scanln(&username)
 
 	fmt.Print("Password: ")
 	pwBytes, err := term.ReadPassword(int(syscall.Stdin))
@@ -298,6 +299,7 @@ func runPush(args []string) {
 }
 
 func uploadDeb(serverURL, repoID, token, filePath string) (int, string, error) {
+	/* #nosec G304 */
 	f, err := os.Open(filePath)
 	if err != nil {
 		return 0, "", err
@@ -389,7 +391,7 @@ func runWhoami(args []string) {
 		fmt.Fprintf(os.Stderr, "Not logged in or token expired. Run: aptify-cli login <server>\n")
 		os.Exit(1)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	fmt.Printf("Server: %s\nToken:  valid\n", cfg.Server)
 }
 

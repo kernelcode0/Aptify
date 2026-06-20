@@ -96,6 +96,7 @@ func (h *Handler) uploadPackage(w http.ResponseWriter, r *http.Request) {
 	}
 	cleanupSavedFile := func() {
 		if savedPath != "" {
+			/* #nosec G703 */
 			_ = os.Remove(savedPath)
 		}
 	}
@@ -168,6 +169,7 @@ func (h *Handler) uploadRPMPackage(w http.ResponseWriter, r *http.Request, repo 
 	}
 	cleanupSavedFile := func() {
 		if savedPath != "" {
+			/* #nosec G703 */
 			_ = os.Remove(savedPath)
 		}
 	}

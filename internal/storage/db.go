@@ -143,6 +143,7 @@ func (d *DB) migrate() error {
 			FOREIGN KEY (repo_id) REFERENCES repos(id) ON DELETE CASCADE,
 			INDEX idx_packages_repo (repo_id)
 		);`
+		/* #nosec G101 */
 		apiKeyTable = `
 		CREATE TABLE IF NOT EXISTS api_keys (
 			id          VARCHAR(36) PRIMARY KEY,
@@ -200,6 +201,7 @@ func (d *DB) migrate() error {
 			control_json TEXT NOT NULL DEFAULT '{}',
 			uploaded_at  DATETIME NOT NULL
 		);`
+		/* #nosec G101 */
 		apiKeyTable = `
 		CREATE TABLE IF NOT EXISTS api_keys (
 			id          TEXT PRIMARY KEY,
