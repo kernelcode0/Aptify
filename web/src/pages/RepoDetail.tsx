@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { api, type Package, type Repo, type SetupInfo } from '../api'
+import { api, type Package, type Repo, type RepoStatus, type SetupInfo } from '../api'
 import './RepoDetail.css'
 
 type Tab = 'packages' | 'setup'
@@ -88,6 +88,7 @@ export default function RepoDetail() {
   const [error, setError] = useState('')
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
+  const [indexStatus, setIndexStatus] = useState<RepoStatus | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const loadRepo = async () => {
@@ -122,6 +123,18 @@ export default function RepoDetail() {
   useEffect(() => {
     if (tab === 'setup') loadSetup()
   }, [tab])
+
+  // Poll index status every 3 s while this page is open.
+  useEffect(() => {
+    if (!id) return
+    let cancelled = false
+    const poll = () => {
+      api.getRepoStatus(id).then(s => { if (!cancelled) setIndexStatus(s) }).catch(() => {})
+    }
+    poll()
+    const timer = setInterval(poll, 3000)
+    return () => { cancelled = true; clearInterval(timer) }
+  }, [id])
 
   const handleUpload = async (file: File) => {
     if (!id || !file.name.endsWith('.deb')) {
@@ -284,6 +297,14 @@ export default function RepoDetail() {
 
       {tab === 'packages' && (
         <div>
+          {indexStatus && (
+            <div className="index-status">
+              {indexStatus.indexing
+                ? <><div className="spinner" style={{ width: 12, height: 12, borderWidth: '2px' }} /> Rebuilding index…</>
+                : <span className="muted-text">Index up to date{indexStatus.last_indexed ? ` · last built ${formatDate(indexStatus.last_indexed)}` : ''}</span>
+              }
+            </div>
+          )}
           <div
             className={`upload-zone${dragOver ? ' drag-over' : ''}${uploading ? ' uploading' : ''}`}
             onDragOver={e => { e.preventDefault(); setDragOver(true) }}

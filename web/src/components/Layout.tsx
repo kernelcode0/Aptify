@@ -64,6 +64,7 @@ export default function Layout() {
         <div className="nav-right">
           <div className="nav-links">
             <Link to="/" className={loc.pathname === '/' ? 'active' : ''}>Repositories</Link>
+            <Link to="/api-keys" className={loc.pathname === '/api-keys' ? 'active' : ''}>API Keys</Link>
           </div>
           <div className="nav-divider" />
           <button className="nav-logout" onClick={handleLogout}>

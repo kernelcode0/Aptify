@@ -1,15 +1,19 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 
 	"github.com/kernelcode0/aptify/internal/api"
 	"github.com/kernelcode0/aptify/internal/index"
+	"github.com/kernelcode0/aptify/internal/indexqueue"
 	"github.com/kernelcode0/aptify/internal/signing"
 	"github.com/kernelcode0/aptify/internal/storage"
 	"github.com/kernelcode0/aptify/internal/web"
@@ -106,7 +110,19 @@ func main() {
 		log.Printf("WARNING: JWT_SECRET not set — using a random secret. All tokens will be invalidated on restart.")
 	}
 
-	handler := api.New(db, fs, gen, signer, jwtSecret, version)
+	// Context cancelled on SIGINT/SIGTERM so the queue worker shuts down cleanly.
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		<-sigCh
+		cancel()
+	}()
+
+	queue := indexqueue.New(gen, db)
+	queue.Start(ctx)
+
+	handler := api.New(db, fs, gen, signer, jwtSecret, version, queue)
 
 	spa := web.Handler()
 	r := handler.Router(spa)
@@ -116,8 +132,18 @@ func main() {
 		port = "8080"
 	}
 
-	log.Printf("Starting Aptify server on :%s", port)
-	if err := http.ListenAndServe(":"+port, r); err != nil {
-		log.Fatalf("server error: %v", err)
+	srv := &http.Server{Addr: ":" + port, Handler: r}
+
+	go func() {
+		log.Printf("Starting Aptify server on :%s", port)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("server error: %v", err)
+		}
+	}()
+
+	<-ctx.Done()
+	log.Println("Shutting down...")
+	if err := srv.Close(); err != nil {
+		log.Printf("server close error: %v", err)
 	}
 }

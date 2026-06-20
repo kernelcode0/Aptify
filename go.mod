@@ -11,6 +11,7 @@ require (
 	github.com/klauspost/compress v1.18.6
 	github.com/ulikunitz/xz v0.5.15
 	golang.org/x/crypto v0.53.0
+	golang.org/x/term v0.44.0
 	modernc.org/sqlite v1.52.0
 )
 

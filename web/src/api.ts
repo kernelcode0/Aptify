@@ -66,6 +66,24 @@ export interface PackageList {
   total: number
 }
 
+export interface APIKey {
+  id: string
+  name: string
+  prefix: string
+  created_at: string
+  last_used: string | null
+}
+
+export interface APIKeyCreated extends APIKey {
+  key: string // only present on creation response
+}
+
+export interface RepoStatus {
+  id: string
+  indexing: boolean
+  last_indexed: string | null
+}
+
 export const api = {
   checkAuth: () => req<{ authenticated: boolean }>('GET', '/api/auth/check'),
   login: (username: string, password: string) => req<{ token: string }>('POST', '/api/auth/login', { username, password }),
@@ -75,11 +93,12 @@ export const api = {
   updateRepo: (id: string, name: string, codename: string) =>
     req<Repo>('PUT', `/api/repos/${id}`, { name, codename }),
   deleteRepo: (id: string) => req<void>('DELETE', `/api/repos/${id}`),
-  listPackages: (repoId: string, page: number = 1, limit: number = 50) => 
+  listPackages: (repoId: string, page: number = 1, limit: number = 50) =>
     req<PackageList>('GET', `/api/repos/${repoId}/packages?page=${page}&limit=${limit}`),
   deletePackage: (repoId: string, pkgId: string) =>
     req<void>('DELETE', `/api/repos/${repoId}/packages/${pkgId}`),
   getSetup: (repoId: string) => req<SetupInfo>('GET', `/api/repos/${repoId}/setup`),
+  getRepoStatus: (repoId: string) => req<RepoStatus>('GET', `/api/repos/${repoId}/status`),
   uploadPackage: async (repoId: string, file: File) => {
     const token = getToken()
     const form = new FormData()
@@ -99,4 +118,7 @@ export const api = {
     }
     return res.json() as Promise<Package>
   },
+  listAPIKeys: () => req<APIKey[]>('GET', '/api/auth/keys'),
+  createAPIKey: (name: string) => req<APIKeyCreated>('POST', '/api/auth/keys', { name }),
+  deleteAPIKey: (id: string) => req<void>('DELETE', `/api/auth/keys/${id}`),
 }
