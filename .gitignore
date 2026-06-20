@@ -20,3 +20,4 @@ apt-repository
 # Environment
 .env
 dist
+testdata
