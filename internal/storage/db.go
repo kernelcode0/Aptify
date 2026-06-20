@@ -131,8 +131,8 @@ func (d *DB) migrate() error {
 			filename     VARCHAR(255) NOT NULL,
 			package      VARCHAR(255) NOT NULL,
 			version      VARCHAR(255) NOT NULL,
-			release      VARCHAR(255) NOT NULL DEFAULT '',
-			arch         VARCHAR(255) NOT NULL,
+			` + "`release`" + `      VARCHAR(255) NOT NULL DEFAULT '',
+			` + "`arch`" + `         VARCHAR(255) NOT NULL,
 			size         BIGINT NOT NULL,
 			sha256       VARCHAR(64) NOT NULL,
 			sha1         VARCHAR(40) NOT NULL,
@@ -283,11 +283,11 @@ func (d *DB) ensurePackageReleaseColumn() error {
 	if exists {
 		return nil
 	}
-	colType := "TEXT"
 	if d.dbType == "mysql" {
-		colType = "VARCHAR(255)"
+		_, err = d.db.Exec("ALTER TABLE packages ADD COLUMN `release` VARCHAR(255) NOT NULL DEFAULT ''")
+	} else {
+		_, err = d.db.Exec("ALTER TABLE packages ADD COLUMN release TEXT NOT NULL DEFAULT ''")
 	}
-	_, err = d.db.Exec(`ALTER TABLE packages ADD COLUMN release ` + colType + ` NOT NULL DEFAULT ''`)
 	return err
 }
 
@@ -314,7 +314,7 @@ func (d *DB) columnExists(table, column string) (bool, error) {
 	var rows *sql.Rows
 	var err error
 	if d.dbType == "mysql" {
-		rows, err = d.db.Query(`SHOW COLUMNS FROM `+table+` LIKE ?`, column)
+		rows, err = d.db.Query("SHOW COLUMNS FROM " + table + " WHERE Field = ?", column)
 	} else {
 		rows, err = d.db.Query(`PRAGMA table_info(` + table + `)`)
 	}
