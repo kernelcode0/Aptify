@@ -1,18 +1,30 @@
 package main
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"strings"
+	"syscall"
+	"time"
 
 	"github.com/kernelcode0/aptify/internal/api"
 	"github.com/kernelcode0/aptify/internal/index"
+	"github.com/kernelcode0/aptify/internal/indexqueue"
 	"github.com/kernelcode0/aptify/internal/signing"
 	"github.com/kernelcode0/aptify/internal/storage"
 	"github.com/kernelcode0/aptify/internal/web"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// version is injected at build time via -ldflags "-X main.version=vX.Y.Z".
+// It defaults to "1.0.0" for local builds.
+var version = "1.0.0"
 
 func main() {
 	dataDir := os.Getenv("DATA_DIR")
@@ -20,7 +32,7 @@ func main() {
 		dataDir = "./data"
 	}
 
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
+	if err := os.MkdirAll(dataDir, 0750); err != nil {
 		log.Fatalf("failed to create data dir: %v", err)
 	}
 
@@ -44,6 +56,7 @@ func main() {
 	if adminUser == "" {
 		adminUser = "admin"
 	}
+	adminUser = strings.ReplaceAll(strings.ReplaceAll(adminUser, "\n", ""), "\r", "")
 	adminPass := os.Getenv("ADMIN_PASSWORD")
 	if adminPass == "" {
 		adminPass = "admin123"
@@ -58,10 +71,10 @@ func main() {
 		if err != nil {
 			log.Fatalf("failed to hash password: %v", err)
 		}
-		if _, err := db.CreateUser(adminUser, string(hash)); err != nil {
+		if _, err := db.CreateUser(adminUser, string(hash), "admin"); err != nil {
 			log.Fatalf("failed to create admin user: %v", err)
 		}
-		log.Printf("Created default admin user: %s", adminUser)
+		log.Printf("Created default admin user: %s", adminUser) // #nosec G706
 	}
 
 	fs, err := storage.NewFileStore(dataDir)
@@ -89,10 +102,30 @@ func main() {
 
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
-		jwtSecret = "super_secret_jwt_string_change_me" // Fallback if missing
+		// Auto-generate a random secret so the binary is secure out of the box.
+		// The tradeoff: tokens are invalidated on every restart because the secret
+		// is ephemeral. Set JWT_SECRET in the environment for persistent sessions.
+		raw := make([]byte, 32)
+		if _, err := rand.Read(raw); err != nil {
+			log.Fatalf("failed to generate JWT secret: %v", err)
+		}
+		jwtSecret = base64.StdEncoding.EncodeToString(raw)
+		log.Printf("WARNING: JWT_SECRET not set — using a random secret. All tokens will be invalidated on restart.")
 	}
 
-	handler := api.New(db, fs, gen, signer, jwtSecret)
+	// Context cancelled on SIGINT/SIGTERM so the queue worker shuts down cleanly.
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		<-sigCh
+		cancel()
+	}()
+
+	queue := indexqueue.New(gen, db)
+	queue.Start(ctx)
+
+	handler := api.New(db, fs, gen, signer, jwtSecret, version, queue)
 
 	spa := web.Handler()
 	r := handler.Router(spa)
@@ -101,9 +134,24 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
+	port = strings.ReplaceAll(strings.ReplaceAll(port, "\n", ""), "\r", "")
 
-	log.Printf("Starting Aptify server on :%s", port)
-	if err := http.ListenAndServe(":"+port, r); err != nil {
-		log.Fatalf("server error: %v", err)
+	srv := &http.Server{
+		Addr:              ":" + port,
+		Handler:           r,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	go func() {
+		log.Printf("Starting Aptify server on :%s", port) // #nosec G706
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("server error: %v", err)
+		}
+	}()
+
+	<-ctx.Done()
+	log.Println("Shutting down...")
+	if err := srv.Close(); err != nil {
+		log.Printf("server close error: %v", err)
 	}
 }

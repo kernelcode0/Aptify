@@ -1,6 +1,9 @@
 services:
   aptify:
-    build: .
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-dev}
     ports:
       - "8080:8080"
     volumes:
@@ -11,7 +14,7 @@ services:
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
       # Generate the key using openssl rand -hex 32
-      - JWT_SECRET=${JWT_SECRET:-YOUR_GENERATED_STRING_HERE}
+      - JWT_SECRET=supersecretvalue123
       - KEY_NAME=${KEY_NAME:-"APT Repository"}
       - KEY_EMAIL=${KEY_EMAIL:-"abc@example.com"}
       # To use MySQL, uncomment the lines below and the db service:

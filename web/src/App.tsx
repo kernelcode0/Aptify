@@ -2,6 +2,10 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import RepoDetail from './pages/RepoDetail'
+import ApiKeys from './pages/ApiKeys'
+import Profile from './pages/Profile'
+import Users from './pages/Users'
+import AuditLog from './pages/AuditLog'
 import Login from './pages/Login'
 
 export default function App() {
@@ -12,6 +16,10 @@ export default function App() {
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/repos/:id" element={<RepoDetail />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/api-keys" element={<ApiKeys />} />
+          <Route path="/users" element={<Users />} />
+          <Route path="/audit" element={<AuditLog />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

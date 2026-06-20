@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { api, setToken } from '../api'
+import { api, setToken, type CurrentUser } from '../api'
 import './Layout.css'
 
 function AptifyMark() {
@@ -30,9 +30,11 @@ export default function Layout() {
   const loc = useLocation()
   const navigate = useNavigate()
   const [checking, setChecking] = useState(true)
+  const [user, setUser] = useState<CurrentUser | null>(null)
 
   useEffect(() => {
     api.checkAuth()
+      .then(setUser)
       .catch(() => {})
       .finally(() => setChecking(false))
   }, [])
@@ -64,8 +66,14 @@ export default function Layout() {
         <div className="nav-right">
           <div className="nav-links">
             <Link to="/" className={loc.pathname === '/' ? 'active' : ''}>Repositories</Link>
+            {user?.role !== 'viewer' && <Link to="/api-keys" className={loc.pathname === '/api-keys' ? 'active' : ''}>API Keys</Link>}
+            {user?.role === 'admin' && <Link to="/users" className={loc.pathname === '/users' ? 'active' : ''}>Users</Link>}
+            {user?.role === 'admin' && <Link to="/audit" className={loc.pathname === '/audit' ? 'active' : ''}>Audit Log</Link>}
           </div>
           <div className="nav-divider" />
+          <Link to="/profile" className={`nav-link ${loc.pathname === '/profile' ? 'active' : ''}`} title={user?.username}>
+            {user?.username}
+          </Link>
           <button className="nav-logout" onClick={handleLogout}>
             <LogOutIcon />
             Sign out
@@ -73,7 +81,7 @@ export default function Layout() {
         </div>
       </nav>
       <main className="main">
-        <Outlet />
+        <Outlet context={{ user }} />
       </main>
     </div>
   )

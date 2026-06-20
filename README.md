@@ -1,5 +1,7 @@
 # Aptify — Self-hosted APT, simplified
 
+![Version](https://img.shields.io/badge/version-v1.0.0-blue.svg)
+
 Aptify is a self-hosted APT repository manager with a clean web UI. Host, sign, and serve your own `.deb` packages without any external infrastructure.
 
 ## Features
@@ -28,6 +30,29 @@ Aptify is a self-hosted APT repository manager with a clean web UI. Host, sign, 
    docker-compose up -d
    ```
 4. Open `http://localhost:8080` in your browser.
+
+## CLI Installation & Usage
+
+Aptify provides a robust command-line client (`aptify-cli`) for easily pushing packages from your local machine or automating uploads in your CI/CD pipelines.
+
+Install it in one line (macOS, Linux, and Windows via Git Bash):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kernelcode0/aptify/main/install.sh | bash
+```
+
+**Usage Examples:**
+
+```bash
+# 1. Login locally (creates and saves an API key to ~/.config/aptify/config.json)
+aptify-cli login http://localhost:8080
+
+# 2. Push a package to your repository
+aptify-cli push my-repo package_1.0.0_amd64.deb
+
+# 3. Use it in a CI/CD script without logging in
+aptify-cli push --server http://localhost:8080 --token YOUR_API_KEY my-repo *.deb
+```
 
 ## Database
 

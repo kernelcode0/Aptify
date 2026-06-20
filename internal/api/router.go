@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -11,9 +12,16 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/kernelcode0/aptify/internal/index"
+	"github.com/kernelcode0/aptify/internal/indexqueue"
 	"github.com/kernelcode0/aptify/internal/signing"
 	"github.com/kernelcode0/aptify/internal/storage"
+	"golang.org/x/crypto/bcrypt"
 )
+
+type ctxKey int
+
+const ctxUserID ctxKey = 0
+const ctxUser ctxKey = 1
 
 // Handler holds all API dependencies.
 type Handler struct {
@@ -22,11 +30,13 @@ type Handler struct {
 	gen       *index.Generator
 	signer    *signing.Signer
 	jwtSecret string
+	version   string
 	indexMu   sync.Mutex
+	queue     *indexqueue.Queue
 }
 
-func New(db *storage.DB, fs *storage.FileStore, gen *index.Generator, signer *signing.Signer, jwtSecret string) *Handler {
-	return &Handler{db: db, fs: fs, gen: gen, signer: signer, jwtSecret: jwtSecret}
+func New(db *storage.DB, fs *storage.FileStore, gen *index.Generator, signer *signing.Signer, jwtSecret, version string, queue *indexqueue.Queue) *Handler {
+	return &Handler{db: db, fs: fs, gen: gen, signer: signer, jwtSecret: jwtSecret, version: version, queue: queue}
 }
 
 func (h *Handler) Router(spa http.Handler) http.Handler {
@@ -34,26 +44,38 @@ func (h *Handler) Router(spa http.Handler) http.Handler {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	// Public APT endpoints — no auth.
+	// Public endpoints — no auth.
+	r.Get("/health", h.health)
 	r.Get("/signing-key.asc", h.servePublicKey)
 	r.Get("/repo/{slug}/dists/*", h.serveRepoFile)
 	r.Get("/repo/{slug}/pool/*", h.serveRepoFile)
+	r.Get("/repo/{slug}/repodata/*", h.serveRepoFile)
+	r.Get("/repo/{slug}/packages/*", h.serveRepoFile)
 
 	// Auth endpoint
 	r.Post("/api/auth/login", h.login)
 
-	// Admin API — protected.
+	// Admin API — protected by JWT or API key.
 	r.Group(func(r chi.Router) {
 		r.Use(h.authMiddleware)
 		r.Get("/api/auth/check", h.authCheck)
-		r.Post("/api/repos", h.createRepo)
+		r.Post("/api/auth/keys", h.createAPIKey)
+		r.Get("/api/auth/keys", h.listAPIKeys)
+		r.Delete("/api/auth/keys/{keyID}", h.deleteAPIKey)
+		r.With(RequireRole("admin")).Post("/api/repos", h.createRepo)
 		r.Get("/api/repos", h.listRepos)
-		r.Put("/api/repos/{id}", h.updateRepo)
-		r.Delete("/api/repos/{id}", h.deleteRepo)
-		r.Post("/api/repos/{id}/packages", h.uploadPackage)
+		r.With(RequireRole("admin")).Put("/api/repos/{id}", h.updateRepo)
+		r.With(RequireRole("admin")).Delete("/api/repos/{id}", h.deleteRepo)
+		r.With(RequireRole("admin", "member")).Post("/api/repos/{id}/packages", h.uploadPackage)
 		r.Get("/api/repos/{id}/packages", h.listPackages)
-		r.Delete("/api/repos/{id}/packages/{pkgID}", h.deletePackage)
+		r.With(RequireRole("admin", "member")).Delete("/api/repos/{id}/packages/{pkgID}", h.deletePackage)
 		r.Get("/api/repos/{id}/setup", h.getSetup)
+		r.Get("/api/repos/{id}/status", h.getRepoStatus)
+		r.With(RequireRole("admin")).Get("/api/users", h.listUsers)
+		r.With(RequireRole("admin")).Post("/api/users", h.createUser)
+		r.With(RequireRole("admin")).Put("/api/users/{id}", h.updateUser)
+		r.With(RequireRole("admin")).Delete("/api/users/{id}", h.deleteUser)
+		r.With(RequireRole("admin")).Get("/api/audit", h.listAuditLog)
 		r.Get("/api/system/gpg-key", h.exportGPGKey)
 	})
 
@@ -67,19 +89,54 @@ func (h *Handler) authMiddleware(next http.Handler) http.Handler {
 		auth := r.Header.Get("Authorization")
 		tokenStr := strings.TrimPrefix(auth, "Bearer ")
 
+		// 1. Try JWT.
 		token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("unexpected signing method")
 			}
 			return []byte(h.jwtSecret), nil
 		})
-
-		if err != nil || !token.Valid {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		if err == nil && token.Valid {
+			claims, ok := token.Claims.(jwt.MapClaims)
+			if !ok {
+				jsonError(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+			userID, _ := claims["sub"].(string)
+			user, err := h.db.GetUserByID(userID)
+			if err != nil || user == nil {
+				jsonError(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+			ctx := context.WithValue(r.Context(), ctxUserID, user.ID)
+			ctx = context.WithValue(ctx, ctxUser, user)
+			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
 
-		next.ServeHTTP(w, r)
+		// 2. Try API key (format: aptify_<32 chars>).
+		if strings.HasPrefix(tokenStr, "aptify_") && len(tokenStr) >= 15 {
+			prefix := tokenStr[7:15]
+			candidates, err := h.db.GetAPIKeyByPrefix(prefix)
+			if err == nil {
+				for _, k := range candidates {
+					if bcrypt.CompareHashAndPassword([]byte(k.KeyHash), []byte(tokenStr)) == nil {
+						_ = h.db.UpdateAPIKeyLastUsed(k.ID)
+						user, err := h.db.GetUserByID(k.UserID)
+						if err != nil || user == nil {
+							jsonError(w, "Unauthorized", http.StatusUnauthorized)
+							return
+						}
+						ctx := context.WithValue(r.Context(), ctxUserID, user.ID)
+						ctx = context.WithValue(ctx, ctxUser, user)
+						next.ServeHTTP(w, r.WithContext(ctx))
+						return
+					}
+				}
+			}
+		}
+
+		jsonError(w, "Unauthorized", http.StatusUnauthorized)
 	})
 }
 
@@ -107,14 +164,22 @@ func (h *Handler) servePublicKey(w http.ResponseWriter, r *http.Request) {
 // serveRepoFile serves static files from the repo's data directory.
 func (h *Handler) serveRepoFile(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
+	if err := storage.ValidateSlug(slug); err != nil {
+		http.Error(w, "invalid slug", http.StatusBadRequest)
+		return
+	}
 	rest := chi.URLParam(r, "*")
 
 	repoDir := h.fs.RepoDir(slug)
 	var filePath string
 	if strings.Contains(r.URL.Path, "/dists/") {
 		filePath = filepath.Join(repoDir, "dists", rest)
-	} else {
+	} else if strings.Contains(r.URL.Path, "/pool/") {
 		filePath = filepath.Join(repoDir, "pool", rest)
+	} else if strings.Contains(r.URL.Path, "/repodata/") {
+		filePath = filepath.Join(repoDir, "repodata", rest)
+	} else {
+		filePath = filepath.Join(repoDir, "packages", rest)
 	}
 
 	cleanPath := filepath.Clean(filePath)

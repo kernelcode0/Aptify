@@ -14,7 +14,7 @@ func TestSQLiteRepoDeleteCascadesPackages(t *testing.T) {
 	}
 	defer db.Close()
 
-	repo, err := db.CreateRepo("tools", "Tools", "stable")
+	repo, err := db.CreateRepo("tools", "Tools", "stable", "deb")
 	if err != nil {
 		t.Fatalf("CreateRepo: %v", err)
 	}

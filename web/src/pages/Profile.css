@@ -1,0 +1,93 @@
+.profile-card {
+  max-width: 500px;
+}
+
+.profile-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  padding: 32px;
+}
+
+.profile-icon {
+  flex-shrink: 0;
+  color: var(--accent, #14b8a6);
+  opacity: 0.7;
+}
+
+.profile-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.profile-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.profile-field label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+
+.profile-value {
+  font-size: 15px;
+  margin: 0;
+  color: var(--text);
+}
+
+.profile-description {
+  font-size: 13px;
+  color: var(--text-secondary, #a0aec0);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: capitalize;
+  border: 1px solid var(--border);
+}
+
+.role-admin {
+  background: rgba(251, 113, 133, 0.12);
+  color: #fda4af;
+  border-color: rgba(251, 113, 133, 0.28);
+}
+
+.role-member {
+  background: rgba(96, 165, 250, 0.12);
+  color: #93c5fd;
+  border-color: rgba(96, 165, 250, 0.28);
+}
+
+.role-viewer {
+  background: rgba(148, 163, 184, 0.12);
+  color: #cbd5e1;
+  border-color: rgba(148, 163, 184, 0.24);
+}
+
+@media (max-width: 480px) {
+  .profile-content {
+    flex-direction: column;
+    gap: 16px;
+    padding: 20px;
+  }
+
+  .profile-icon {
+    width: 40px;
+    height: 40px;
+  }
+}

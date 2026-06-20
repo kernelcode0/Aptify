@@ -1,0 +1,50 @@
+.audit-table td {
+  vertical-align: top;
+}
+
+.audit-detail {
+  margin: 0;
+  padding: 8px 10px;
+  max-width: 360px;
+  white-space: pre-wrap;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.audit-raw {
+  display: inline-block;
+  max-width: 360px;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.audit-detail-kv {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  min-width: 140px;
+}
+
+.kv-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.kv-key {
+  color: var(--text-2);
+  font-weight: 600;
+}
+
+.kv-val {
+  color: var(--accent-hover);
+  font-family: var(--mono);
+  word-break: break-all;
+}

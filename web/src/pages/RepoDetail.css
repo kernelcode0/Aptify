@@ -1,3 +1,12 @@
+.index-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
 .detail-header {
   display: flex;
   justify-content: space-between;
