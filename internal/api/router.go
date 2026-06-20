@@ -164,6 +164,10 @@ func (h *Handler) servePublicKey(w http.ResponseWriter, r *http.Request) {
 // serveRepoFile serves static files from the repo's data directory.
 func (h *Handler) serveRepoFile(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
+	if err := storage.ValidateSlug(slug); err != nil {
+		http.Error(w, "invalid slug", http.StatusBadRequest)
+		return
+	}
 	rest := chi.URLParam(r, "*")
 
 	repoDir := h.fs.RepoDir(slug)

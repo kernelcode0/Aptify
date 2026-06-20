@@ -517,7 +517,7 @@ func (d *DB) AddPackage(p *Package) error {
 	p.ID = uuid.NewString()
 	p.UploadedAt = time.Now().UTC()
 	_, err := d.db.Exec(
-		`INSERT INTO packages (id, repo_id, filename, package, version, release, arch, size, sha256, sha1, md5, control_json, uploaded_at)
+		`INSERT INTO packages (id, repo_id, filename, package, version, `+"`release`"+`, arch, size, sha256, sha1, md5, control_json, uploaded_at)
 		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		p.ID, p.RepoID, p.Filename, p.Package, p.Version, p.Release, p.Arch,
 		p.Size, p.SHA256, p.SHA1, p.MD5, p.ControlJSON, p.UploadedAt,
@@ -527,7 +527,7 @@ func (d *DB) AddPackage(p *Package) error {
 
 // ListPackages returns all packages for a repo. If limit > 0, it applies pagination.
 func (d *DB) ListPackages(repoID string, limit, offset int) ([]Package, error) {
-	query := `SELECT id, repo_id, filename, package, version, release, arch, size, sha256, sha1, md5, control_json, uploaded_at
+	query := `SELECT id, repo_id, filename, package, version, `+"`release`"+`, arch, size, sha256, sha1, md5, control_json, uploaded_at
 		 FROM packages WHERE repo_id=? ORDER BY uploaded_at DESC`
 
 	var rows *sql.Rows
@@ -566,7 +566,7 @@ func (d *DB) CountPackages(repoID string) (int, error) {
 func (d *DB) GetPackage(id string) (*Package, error) {
 	p := &Package{}
 	err := d.db.QueryRow(
-		`SELECT id, repo_id, filename, package, version, release, arch, size, sha256, sha1, md5, control_json, uploaded_at
+		`SELECT id, repo_id, filename, package, version, `+"`release`"+`, arch, size, sha256, sha1, md5, control_json, uploaded_at
 		 FROM packages WHERE id=?`, id,
 	).Scan(&p.ID, &p.RepoID, &p.Filename, &p.Package, &p.Version, &p.Release, &p.Arch,
 		&p.Size, &p.SHA256, &p.SHA1, &p.MD5, &p.ControlJSON, &p.UploadedAt)
@@ -588,13 +588,12 @@ func (d *DB) Ping() error {
 	return err
 }
 
-// PackageExists checks whether a package with the same name, version, arch, and
-// SHA256 already exists in the given repo. Returns the existing package ID if found.
-func (d *DB) PackageExists(repoID, packageName, version, arch, sha256 string) (string, bool, error) {
+// PackageFilenameExists checks whether a package with the same filename already exists in the given repo.
+func (d *DB) PackageFilenameExists(repoID, filename string) (string, bool, error) {
 	var id string
 	err := d.db.QueryRow(
-		`SELECT id FROM packages WHERE repo_id=? AND package=? AND version=? AND arch=? AND sha256=? LIMIT 1`,
-		repoID, packageName, version, arch, sha256,
+		`SELECT id FROM packages WHERE repo_id=? AND filename=? LIMIT 1`,
+		repoID, filename,
 	).Scan(&id)
 	if err == sql.ErrNoRows {
 		return "", false, nil

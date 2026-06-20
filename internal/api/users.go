@@ -107,7 +107,7 @@ func (h *Handler) updateUser(w http.ResponseWriter, r *http.Request) {
 			jsonError(w, "invalid role", http.StatusBadRequest)
 			return
 		}
-		if current != nil && current.ID == id && role != "admin" {
+		if current != nil && current.ID == id {
 			jsonError(w, "cannot change your own role", http.StatusBadRequest)
 			return
 		}

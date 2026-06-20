@@ -77,8 +77,8 @@ func (h *Handler) uploadPackage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Reject duplicate: same package/version/arch/sha256 in this repo.
-	if existingID, exists, err := h.db.PackageExists(repo.ID, info.Package, info.Version, info.Architecture, info.SHA256); err != nil {
+	// Reject duplicate file overwrites in this repo.
+	if existingID, exists, err := h.db.PackageFilenameExists(repo.ID, filename); err != nil {
 		jsonError(w, "db error: "+err.Error(), http.StatusInternalServerError)
 		return
 	} else if exists {
@@ -150,7 +150,8 @@ func (h *Handler) uploadRPMPackage(w http.ResponseWriter, r *http.Request, repo 
 		jsonError(w, "invalid package name in rpm filename", http.StatusBadRequest)
 		return
 	}
-	if existingID, exists, err := h.db.PackageExists(repo.ID, info.Package, info.Version, info.Arch, info.SHA256); err != nil {
+	// Reject duplicate file overwrites in this repo.
+	if existingID, exists, err := h.db.PackageFilenameExists(repo.ID, filename); err != nil {
 		jsonError(w, "db error: "+err.Error(), http.StatusInternalServerError)
 		return
 	} else if exists {
@@ -347,6 +348,9 @@ func cleanControl(block string) string {
 		"sha1": true, "md5sum": true, "md5": true,
 	}
 	for _, line := range strings.Split(block, "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
 		if idx := strings.IndexByte(line, ':'); idx > 0 {
 			key := strings.ToLower(strings.TrimSpace(line[:idx]))
 			if skip[key] {
