@@ -26,6 +26,60 @@ import (
 // It defaults to "1.0.0" for local builds.
 var version = "1.0.0"
 
+// knownWeakPasswords is an explicit blocklist of credentials that must never
+// be accepted in production. Fail fast if an operator forgets to rotate them.
+var knownWeakPasswords = map[string]bool{
+	"admin123":            true,
+	"password":            true,
+	"changeme":            true,
+	"secret":              true,
+	"letmein":             true,
+	"admin":               true,
+	"123456":              true,
+	"aptifypass":          true,
+	"rootpass":            true,
+	"supersecretvalue123": true,
+}
+
+// knownWeakJWTSecrets lists default/example JWT secrets that must be rejected.
+var knownWeakJWTSecrets = map[string]bool{
+	"supersecretvalue123":               true,
+	"super_secret_jwt_string_change_me": true,
+	"secret":                            true,
+	"changeme":                          true,
+}
+
+// validateSecrets checks that all required secrets are set, sufficiently long,
+// and not known defaults. It calls log.Fatal on the first violation so the
+// process exits before any network listener is opened.
+func validateSecrets(jwtSecret, adminPass string) {
+	// --- JWT_SECRET ---
+	if jwtSecret == "" {
+		log.Fatal("FATAL: JWT_SECRET environment variable must be set. " +
+			"Generate one with: openssl rand -hex 32")
+	}
+	if len(jwtSecret) < 32 {
+		log.Fatal("FATAL: JWT_SECRET must be at least 32 characters long. " +
+			"Generate one with: openssl rand -hex 32")
+	}
+	if knownWeakJWTSecrets[jwtSecret] {
+		log.Fatal("FATAL: JWT_SECRET is a known insecure default value. " +
+			"Generate a secure secret with: openssl rand -hex 32")
+	}
+
+	// --- ADMIN_PASSWORD ---
+	if adminPass == "" {
+		log.Fatal("FATAL: ADMIN_PASSWORD environment variable must be set.")
+	}
+	if len(adminPass) < 8 {
+		log.Fatal("FATAL: ADMIN_PASSWORD must be at least 8 characters long.")
+	}
+	if knownWeakPasswords[strings.ToLower(adminPass)] {
+		log.Fatalf("FATAL: ADMIN_PASSWORD '%s' is a known insecure default value. "+
+			"Choose a strong, unique password.", adminPass)
+	}
+}
+
 func main() {
 	dataDir := os.Getenv("DATA_DIR")
 	if dataDir == "" {
@@ -51,16 +105,43 @@ func main() {
 	}
 	defer db.Close()
 
+	// --- Secret validation — fail fast before any further initialisation ---
+	jwtSecret := os.Getenv("JWT_SECRET")
+	adminPass := os.Getenv("ADMIN_PASSWORD")
+
+	// In development mode (APTIFY_DEV=1) we allow an ephemeral JWT secret to
+	// be auto-generated for local convenience. All other validations still apply.
+	devMode := os.Getenv("APTIFY_DEV") == "1"
+
+	if jwtSecret == "" && devMode {
+		// Auto-generate a random secret for ephemeral dev sessions only.
+		raw := make([]byte, 32)
+		if _, err := rand.Read(raw); err != nil {
+			log.Fatalf("failed to generate JWT secret: %v", err)
+		}
+		jwtSecret = base64.StdEncoding.EncodeToString(raw)
+		log.Printf("WARNING: JWT_SECRET not set — using ephemeral random secret (APTIFY_DEV=1). " +
+			"All tokens will be invalidated on restart. Do NOT use this in production.")
+	}
+
+	// ADMIN_PASSWORD must always be explicitly set — even in dev mode.
+	if adminPass == "" && devMode {
+		log.Fatal("FATAL: ADMIN_PASSWORD must be set even in dev mode. " +
+			"Set ADMIN_PASSWORD=your-local-dev-password")
+	}
+
+	if !devMode {
+		validateSecrets(jwtSecret, adminPass)
+	} else if adminPass != "" && knownWeakPasswords[strings.ToLower(adminPass)] {
+		log.Printf("WARNING: ADMIN_PASSWORD is a known weak value. Do not use this in production.")
+	}
+
 	// Ensure admin user exists
 	adminUser := os.Getenv("ADMIN_USERNAME")
 	if adminUser == "" {
 		adminUser = "admin"
 	}
 	adminUser = strings.ReplaceAll(strings.ReplaceAll(adminUser, "\n", ""), "\r", "")
-	adminPass := os.Getenv("ADMIN_PASSWORD")
-	if adminPass == "" {
-		adminPass = "admin123"
-	}
 
 	u, err := db.GetUserByUsername(adminUser)
 	if err != nil {
@@ -100,19 +181,6 @@ func main() {
 
 	gen := index.New(fs, signer)
 
-	jwtSecret := os.Getenv("JWT_SECRET")
-	if jwtSecret == "" {
-		// Auto-generate a random secret so the binary is secure out of the box.
-		// The tradeoff: tokens are invalidated on every restart because the secret
-		// is ephemeral. Set JWT_SECRET in the environment for persistent sessions.
-		raw := make([]byte, 32)
-		if _, err := rand.Read(raw); err != nil {
-			log.Fatalf("failed to generate JWT secret: %v", err)
-		}
-		jwtSecret = base64.StdEncoding.EncodeToString(raw)
-		log.Printf("WARNING: JWT_SECRET not set — using a random secret. All tokens will be invalidated on restart.")
-	}
-
 	// Context cancelled on SIGINT/SIGTERM so the queue worker shuts down cleanly.
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
@@ -137,9 +205,17 @@ func main() {
 	port = strings.ReplaceAll(strings.ReplaceAll(port, "\n", ""), "\r", "")
 
 	srv := &http.Server{
-		Addr:              ":" + port,
-		Handler:           r,
+		Addr:    ":" + port,
+		Handler: r,
+		// ReadHeaderTimeout guards against Slow-Loris header attacks.
 		ReadHeaderTimeout: 5 * time.Second,
+		// ReadTimeout covers the entire request body (e.g. large uploads).
+		ReadTimeout: 60 * time.Second,
+		// WriteTimeout is high to accommodate 512 MiB package uploads on slow links.
+		WriteTimeout: 300 * time.Second,
+		// IdleTimeout caps keep-alive idle connections.
+		IdleTimeout:    120 * time.Second,
+		MaxHeaderBytes: 1 << 20, // 1 MiB
 	}
 
 	go func() {

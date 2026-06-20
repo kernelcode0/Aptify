@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { setToken, api } from '../api'
+import { api } from '../api'
 import './Login.css'
 
 type IconName = 'user' | 'lock' | 'eye' | 'eyeOff' | 'arrow' | 'alert' | 'shield' | 'package' | 'check'
@@ -38,12 +38,12 @@ export default function Login() {
     setLoading(true)
     setError('')
     try {
-      const res = await api.login(username, password)
-      setToken(res.token)
+      // The server sets an HttpOnly session cookie on successful login.
+      // No token is stored client-side.
+      await api.login(username, password)
       const from = (location.state as { from?: { pathname?: string } })?.from?.pathname || '/'
       navigate(from, { replace: true })
     } catch {
-      setToken('')
       setError('The username or password you entered is incorrect.')
     } finally {
       setLoading(false)
