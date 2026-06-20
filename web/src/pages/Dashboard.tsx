@@ -173,7 +173,7 @@ export default function Dashboard() {
                   id="repo-name"
                   value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="Ubuntu Developer Toolkit"
+                  placeholder={form.type === 'rpm' ? 'Fedora Developer Toolkit' : 'Ubuntu Developer Toolkit'}
                   required
                   autoFocus
                 />
@@ -184,7 +184,7 @@ export default function Dashboard() {
                   id="repo-slug"
                   value={form.slug}
                   onChange={e => setForm(f => ({ ...f, slug: e.target.value.toLowerCase() }))}
-                  placeholder="ubuntu-toolkit"
+                  placeholder={form.type === 'rpm' ? 'fedora-toolkit' : 'ubuntu-toolkit'}
                   pattern="[a-z0-9][a-z0-9\-]{0,62}"
                   required
                 />
