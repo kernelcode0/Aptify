@@ -28,6 +28,7 @@ export default function Dashboard() {
   const [form, setForm] = useState<{ slug: string; name: string; codename: string; type: Repo['type'] }>({ slug: '', name: '', codename: 'stable', type: 'deb' })
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
+  const [createError, setCreateError] = useState('')
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<RepoFilter>('all')
   const [sort, setSort] = useState<RepoSort>('newest')
@@ -57,14 +58,14 @@ export default function Dashboard() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     setCreating(true)
-    setError('')
+    setCreateError('')
     try {
       const repo = await api.createRepo(form.slug, form.name, form.codename, form.type)
       setShowNew(false)
       setForm({ slug: '', name: '', codename: 'stable', type: 'deb' })
       navigate(`/repos/${repo.id}`)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Unknown error')
+      setCreateError(e instanceof Error ? e.message : 'Unknown error')
     } finally {
       setCreating(false)
     }
@@ -95,7 +96,7 @@ export default function Dashboard() {
           <h1 className="page-title">Repositories</h1>
           <p className="page-sub">Manage package sources, distribution suites, and signing from one place.</p>
         </div>
-        {user?.role === 'admin' && <button className="primary hero-primary" onClick={() => setShowNew(true)}><Icon name="plus" />New repository</button>}
+        {user?.role === 'admin' && <button className="primary hero-primary" onClick={() => { setCreateError(''); setShowNew(true) }}><Icon name="plus" />New repository</button>}
       </header>
 
       {error && <div className="alert-error" role="alert"><Icon name="alert" /> <span>{error}</span><button onClick={() => setError('')} aria-label="Dismiss error"><Icon name="x" size={14} /></button></div>}
@@ -105,6 +106,7 @@ export default function Dashboard() {
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="create-repo-title">
             <div className="modal-header"><div><div className="modal-kicker">New package source</div><h2 id="create-repo-title">Create repository</h2></div><button className="modal-close" onClick={() => setShowNew(false)} aria-label="Close"><Icon name="x" /></button></div>
             <form onSubmit={handleCreate} className="form-stack">
+              {createError && <div className="alert-error" role="alert"><Icon name="alert" /> <span>{createError}</span></div>}
               <div className="field"><label htmlFor="repo-type">Package format</label><div className="type-picker">
                 {(['deb', 'rpm'] as const).map(type => <button key={type} type="button" className={form.type === type ? 'selected' : ''} onClick={() => setForm(f => ({ ...f, type }))}><strong>{type.toUpperCase()}</strong><span>{type === 'deb' ? 'Debian / Ubuntu' : 'Red Hat / Fedora'}</span></button>)}
               </div></div>
