@@ -66,11 +66,14 @@ export default function Layout() {
         <div className="nav-right">
           <div className="nav-links">
             <Link to="/" className={loc.pathname === '/' ? 'active' : ''}>Repositories</Link>
-            <Link to="/api-keys" className={loc.pathname === '/api-keys' ? 'active' : ''}>API Keys</Link>
+            {user?.role !== 'viewer' && <Link to="/api-keys" className={loc.pathname === '/api-keys' ? 'active' : ''}>API Keys</Link>}
             {user?.role === 'admin' && <Link to="/users" className={loc.pathname === '/users' ? 'active' : ''}>Users</Link>}
             {user?.role === 'admin' && <Link to="/audit" className={loc.pathname === '/audit' ? 'active' : ''}>Audit Log</Link>}
           </div>
           <div className="nav-divider" />
+          <Link to="/profile" className={`nav-link ${loc.pathname === '/profile' ? 'active' : ''}`} title={user?.username}>
+            {user?.username}
+          </Link>
           <button className="nav-logout" onClick={handleLogout}>
             <LogOutIcon />
             Sign out

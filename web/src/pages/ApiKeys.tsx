@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { api, type APIKey, type APIKeyCreated } from '../api'
+import { useOutletContext } from 'react-router-dom'
+import { api, type APIKey, type APIKeyCreated, type CurrentUser } from '../api'
 import './ApiKeys.css'
 
 function PlusIcon() {
@@ -48,6 +49,7 @@ function KeyIcon() {
 }
 
 export default function ApiKeys() {
+  const { user } = useOutletContext<{ user: CurrentUser | null }>()
   const [keys, setKeys] = useState<APIKey[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -56,6 +58,23 @@ export default function ApiKeys() {
   const [creating, setCreating] = useState(false)
   const [newKey, setNewKey] = useState<APIKeyCreated | null>(null)
   const [copied, setCopied] = useState(false)
+
+  if (user?.role === 'viewer') {
+    return (
+      <div>
+        <div className="page-header">
+          <div>
+            <div className="page-kicker">Authentication</div>
+            <h1 className="page-title">API Keys</h1>
+          </div>
+        </div>
+        <div className="empty-state">
+          <h3>Access Denied</h3>
+          <p>You don't have permission to manage API keys. Contact an administrator if you need access.</p>
+        </div>
+      </div>
+    )
+  }
 
   const load = () => {
     api.listAPIKeys()
