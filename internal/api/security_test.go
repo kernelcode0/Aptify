@@ -38,9 +38,8 @@ func setupTestHandler(t *testing.T) *Handler {
 		t.Fatalf("failed to create signer: %v", err)
 	}
 
-	return New(db, nil, nil, signer, "super_secret_test_jwt_key", "v1.0.5", nil)
+	return New(db, nil, nil, signer, "super_secret_test_jwt_key", "v1.0.6", nil)
 }
-
 
 func TestSecurityHeaders(t *testing.T) {
 	h := setupTestHandler(t)
@@ -216,7 +215,7 @@ func TestGPGKeyExportDisabled(t *testing.T) {
 	defer os.Unsetenv("ENABLE_PRIVATE_KEY_EXPORT")
 	rr2 := httptest.NewRecorder()
 	h.exportGPGKey(rr2, req)
-	
+
 	if rr2.Code != http.StatusOK {
 		t.Errorf("Expected 200 OK for enabled GPG key export, got %v", rr2.Code)
 	}

@@ -26,7 +26,7 @@ If applicable, add screenshots to help explain your problem.
  - OS: [e.g. Ubuntu 22.04]
  - Deployment Method: [e.g. Docker, Binary]
  - Browser: [e.g. Chrome, Firefox]
- - Version: [e.g. v1.0.5 or commit hash]
+ - Version: [e.g. v1.0.6 or commit hash]
 
 **Additional context**
 Add any other context about the problem here (e.g. logs from the docker container).
