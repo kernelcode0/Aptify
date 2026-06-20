@@ -4,6 +4,18 @@ import (
 	"net/http"
 )
 
+func (h *Handler) health(w http.ResponseWriter, r *http.Request) {
+	dbStatus := "ok"
+	if err := h.db.Ping(); err != nil {
+		dbStatus = "error"
+	}
+	jsonOK(w, map[string]string{
+		"status":  "ok",
+		"version": h.version,
+		"db":      dbStatus,
+	}, http.StatusOK)
+}
+
 func (h *Handler) exportGPGKey(w http.ResponseWriter, r *http.Request) {
 	privKey, err := h.signer.PrivateKeyArmored()
 	if err != nil {

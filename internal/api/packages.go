@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -63,6 +64,17 @@ func (h *Handler) uploadPackage(w http.ResponseWriter, r *http.Request) {
 
 	if !validPkgName.MatchString(info.Package) {
 		jsonError(w, "invalid package name in control file", http.StatusBadRequest)
+		return
+	}
+
+	// Reject duplicate: same package/version/arch/sha256 in this repo.
+	if existingID, exists, err := h.db.PackageExists(repo.ID, info.Package, info.Version, info.Architecture, info.SHA256); err != nil {
+		jsonError(w, "db error: "+err.Error(), http.StatusInternalServerError)
+		return
+	} else if exists {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "package already exists", "id": existingID})
 		return
 	}
 

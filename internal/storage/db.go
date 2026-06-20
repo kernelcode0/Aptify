@@ -355,4 +355,27 @@ func (d *DB) DeletePackage(id string) error {
 	return err
 }
 
+// Ping checks that the database connection is alive.
+func (d *DB) Ping() error {
+	_, err := d.db.Exec(`SELECT 1`)
+	return err
+}
+
+// PackageExists checks whether a package with the same name, version, arch, and
+// SHA256 already exists in the given repo. Returns the existing package ID if found.
+func (d *DB) PackageExists(repoID, packageName, version, arch, sha256 string) (string, bool, error) {
+	var id string
+	err := d.db.QueryRow(
+		`SELECT id FROM packages WHERE repo_id=? AND package=? AND version=? AND arch=? AND sha256=? LIMIT 1`,
+		repoID, packageName, version, arch, sha256,
+	).Scan(&id)
+	if err == sql.ErrNoRows {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return id, true, nil
+}
+
 func (d *DB) Close() error { return d.db.Close() }
