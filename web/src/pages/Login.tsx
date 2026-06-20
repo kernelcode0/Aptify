@@ -55,13 +55,13 @@ export default function Login() {
           <span className="login-brand-icon"><PackageIcon /></span>
           <div className="login-brand-text">
             <span className="login-brand-name">Aptify</span>
-            <span className="login-brand-tagline">Self-hosted APT, simplified</span>
+            <span className="login-brand-tagline">Self-hosted packages, simplified</span>
           </div>
         </div>
 
         <div className="login-heading">
           <h1>Welcome back</h1>
-          <p>Sign in to manage your APT repositories</p>
+          <p>Sign in to manage your package repositories</p>
         </div>
 
         {error && (
@@ -73,8 +73,9 @@ export default function Login() {
 
         <form onSubmit={handleSubmit} className="form-stack">
           <div className="field">
-            <label>Username</label>
+            <label htmlFor="username">Username</label>
             <input
+              id="username"
               type="text"
               value={username}
               onChange={e => setUsername(e.target.value)}
@@ -84,8 +85,9 @@ export default function Login() {
             />
           </div>
           <div className="field">
-            <label>Password</label>
+            <label htmlFor="password">Password</label>
             <input
+              id="password"
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}

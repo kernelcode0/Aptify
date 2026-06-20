@@ -70,6 +70,20 @@ func (fs *FileStore) InitRepo(slug, codename string) error {
 	return nil
 }
 
+// InitRPMRepo creates the directory tree used by yum/dnf repositories.
+func (fs *FileStore) InitRPMRepo(slug string) error {
+	dirs := []string{
+		filepath.Join(fs.RepoDir(slug), "packages"),
+		filepath.Join(fs.RepoDir(slug), "repodata"),
+	}
+	for _, d := range dirs {
+		if err := os.MkdirAll(d, 0750); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // SavePackage writes the .deb bytes to the pool directory, creating dirs as needed.
 func (fs *FileStore) SavePackage(slug, pkgName, filename string, r io.Reader) (string, error) {
 	dir := fs.PoolDir(slug, pkgName)
@@ -79,6 +93,25 @@ func (fs *FileStore) SavePackage(slug, pkgName, filename string, r io.Reader) (s
 	filename = filepath.Base(filepath.Clean(filename))
 	dest := filepath.Join(dir, filename)
 	// #nosec G304 -- dest is bounded by dir and filename is sanitized
+	f, err := os.OpenFile(dest, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	if _, err := io.Copy(f, r); err != nil {
+		return "", err
+	}
+	return dest, nil
+}
+
+// SaveRPMPackage writes the .rpm bytes to the repository packages directory.
+func (fs *FileStore) SaveRPMPackage(slug, filename string, r io.Reader) (string, error) {
+	dir := filepath.Join(fs.RepoDir(slug), "packages")
+	if err := os.MkdirAll(dir, 0750); err != nil {
+		return "", err
+	}
+	filename = filepath.Base(filepath.Clean(filename))
+	dest := filepath.Join(dir, filename)
 	f, err := os.OpenFile(dest, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return "", err
@@ -105,6 +138,12 @@ func (fs *FileStore) DeletePackageFile(slug, pkgName, filename string) error {
 	filename = filepath.Base(filepath.Clean(filename))
 	path := filepath.Join(fs.PoolDir(slug, pkgName), filename)
 	return os.Remove(path)
+}
+
+// DeleteRPMPackageFile removes an RPM package file from disk.
+func (fs *FileStore) DeleteRPMPackageFile(slug, filename string) error {
+	filename = filepath.Base(filepath.Clean(filename))
+	return os.Remove(filepath.Join(fs.RepoDir(slug), "packages", filename))
 }
 
 // DeleteRepoDir removes all on-disk files for a repository.

@@ -412,7 +412,7 @@ func usage() {
 
 Commands:
   login <server-url>             Authenticate and save an API key
-  push  <slug> <file> [...]      Upload .deb packages to a repository
+  push  <slug> <file> [...]      Upload packages to a repository
   repos                          List repositories
   whoami                         Check authentication status
   logout                         Remove saved credentials

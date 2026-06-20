@@ -16,6 +16,7 @@ type createRepoRequest struct {
 	Slug     string `json:"slug"`
 	Name     string `json:"name"`
 	Codename string `json:"codename"`
+	Type     string `json:"type"`
 }
 
 func (h *Handler) createRepo(w http.ResponseWriter, r *http.Request) {
@@ -24,7 +25,14 @@ func (h *Handler) createRepo(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
-	if req.Codename == "" {
+	if req.Type == "" {
+		req.Type = "deb"
+	}
+	if req.Type != "deb" && req.Type != "rpm" {
+		jsonError(w, "type must be deb or rpm", http.StatusBadRequest)
+		return
+	}
+	if req.Type == "deb" && req.Codename == "" {
 		req.Codename = "stable"
 	}
 	if err := storage.ValidateSlug(req.Slug); err != nil {
@@ -35,7 +43,7 @@ func (h *Handler) createRepo(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "name is required", http.StatusBadRequest)
 		return
 	}
-	if !codenameRe.MatchString(req.Codename) {
+	if req.Type == "deb" && !codenameRe.MatchString(req.Codename) {
 		jsonError(w, "invalid codename", http.StatusBadRequest)
 		return
 	}
@@ -50,12 +58,18 @@ func (h *Handler) createRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.fs.InitRepo(req.Slug, req.Codename); err != nil {
+	var initErr error
+	if req.Type == "rpm" {
+		initErr = h.fs.InitRPMRepo(req.Slug)
+	} else {
+		initErr = h.fs.InitRepo(req.Slug, req.Codename)
+	}
+	if initErr != nil {
 		jsonError(w, "failed to create repo dirs", http.StatusInternalServerError)
 		return
 	}
 
-	repo, err := h.db.CreateRepo(req.Slug, req.Name, req.Codename)
+	repo, err := h.db.CreateRepo(req.Slug, req.Name, req.Codename, req.Type)
 	if err != nil {
 		jsonError(w, "db error", http.StatusInternalServerError)
 		return
@@ -126,12 +140,12 @@ func (h *Handler) updateRepo(w http.ResponseWriter, r *http.Request) {
 	if req.Codename == "" {
 		req.Codename = repo.Codename
 	}
-	if !codenameRe.MatchString(req.Codename) {
+	if repo.Type == "deb" && !codenameRe.MatchString(req.Codename) {
 		jsonError(w, "invalid codename", http.StatusBadRequest)
 		return
 	}
 
-	codenameChanged := repo.Codename != req.Codename
+	codenameChanged := repo.Type == "deb" && repo.Codename != req.Codename
 	if codenameChanged {
 		if err := h.fs.InitRepo(repo.Slug, req.Codename); err != nil {
 			jsonError(w, "failed to create repo dirs", http.StatusInternalServerError)
@@ -180,7 +194,25 @@ func (h *Handler) getSetup(w http.ResponseWriter, r *http.Request) {
 		archStr = strings.Join(arches, ",")
 	}
 
+	if repo.Type == "rpm" {
+		jsonOK(w, map[string]string{
+			"type":    "rpm",
+			"keyURL":  baseURL + "/signing-key.asc",
+			"repoURL": baseURL + "/repo/" + repo.Slug,
+			"repoFile": `[aptify-` + repo.Slug + `]
+name=` + repo.Name + `
+baseurl=` + baseURL + `/repo/` + repo.Slug + `
+enabled=1
+gpgcheck=1
+gpgkey=` + baseURL + `/signing-key.asc`,
+			"install": "sudo tee /etc/yum.repos.d/" + repo.Slug + ".repo",
+			"update":  "sudo dnf makecache",
+		}, http.StatusOK)
+		return
+	}
+
 	jsonOK(w, map[string]string{
+		"type":      "deb",
 		"keyURL":    baseURL + "/signing-key.asc",
 		"repoURL":   baseURL + "/repo/" + repo.Slug,
 		"codename":  repo.Codename,

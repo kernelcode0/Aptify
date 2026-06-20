@@ -49,6 +49,8 @@ func (h *Handler) Router(spa http.Handler) http.Handler {
 	r.Get("/signing-key.asc", h.servePublicKey)
 	r.Get("/repo/{slug}/dists/*", h.serveRepoFile)
 	r.Get("/repo/{slug}/pool/*", h.serveRepoFile)
+	r.Get("/repo/{slug}/repodata/*", h.serveRepoFile)
+	r.Get("/repo/{slug}/packages/*", h.serveRepoFile)
 
 	// Auth endpoint
 	r.Post("/api/auth/login", h.login)
@@ -168,8 +170,12 @@ func (h *Handler) serveRepoFile(w http.ResponseWriter, r *http.Request) {
 	var filePath string
 	if strings.Contains(r.URL.Path, "/dists/") {
 		filePath = filepath.Join(repoDir, "dists", rest)
-	} else {
+	} else if strings.Contains(r.URL.Path, "/pool/") {
 		filePath = filepath.Join(repoDir, "pool", rest)
+	} else if strings.Contains(r.URL.Path, "/repodata/") {
+		filePath = filepath.Join(repoDir, "repodata", rest)
+	} else {
+		filePath = filepath.Join(repoDir, "packages", rest)
 	}
 
 	cleanPath := filepath.Clean(filePath)

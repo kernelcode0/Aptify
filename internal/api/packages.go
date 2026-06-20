@@ -2,6 +2,10 @@ package api
 
 import (
 	"bytes"
+	"crypto/md5"  // #nosec G501
+	"crypto/sha1" // #nosec G505
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,6 +22,7 @@ import (
 )
 
 var validPkgName = regexp.MustCompile(`^[a-z0-9\+\-\.]+$`)
+var rpmFilenameRe = regexp.MustCompile(`^(.+)-([^-]+)-([^-]+)\.([A-Za-z0-9_]+)\.rpm$`)
 
 const maxUploadSize = 512 << 20 // 512 MiB
 
@@ -42,8 +47,13 @@ func (h *Handler) uploadPackage(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
+	if repo.Type == "rpm" {
+		h.uploadRPMPackage(w, r, repo, file, header.Filename)
+		return
+	}
+
 	if !strings.HasSuffix(header.Filename, ".deb") {
-		jsonError(w, "only .deb files are accepted", http.StatusBadRequest)
+		jsonError(w, "this repo expects .deb files", http.StatusBadRequest)
 		return
 	}
 
@@ -119,6 +129,111 @@ func (h *Handler) uploadPackage(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, pkg, http.StatusCreated)
 }
 
+func (h *Handler) uploadRPMPackage(w http.ResponseWriter, r *http.Request, repo *storage.Repo, file io.Reader, originalFilename string) {
+	if !strings.HasSuffix(originalFilename, ".rpm") {
+		jsonError(w, "this repo expects .rpm files", http.StatusBadRequest)
+		return
+	}
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		jsonError(w, "read error", http.StatusInternalServerError)
+		return
+	}
+	filename := sanitizeFilename(originalFilename)
+	info, err := parseRPMFilename(filename, data)
+	if err != nil {
+		jsonError(w, "invalid .rpm: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if !validPkgName.MatchString(info.Package) {
+		jsonError(w, "invalid package name in rpm filename", http.StatusBadRequest)
+		return
+	}
+	if existingID, exists, err := h.db.PackageExists(repo.ID, info.Package, info.Version, info.Arch, info.SHA256); err != nil {
+		jsonError(w, "db error: "+err.Error(), http.StatusInternalServerError)
+		return
+	} else if exists {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "package already exists", "id": existingID})
+		return
+	}
+
+	savedPath, err := h.fs.SaveRPMPackage(repo.Slug, filename, bytes.NewReader(data))
+	if err != nil {
+		jsonError(w, "storage error", http.StatusInternalServerError)
+		return
+	}
+	cleanupSavedFile := func() {
+		if savedPath != "" {
+			_ = os.Remove(savedPath)
+		}
+	}
+
+	pkg := &storage.Package{
+		RepoID:   repo.ID,
+		Filename: filename,
+		Package:  info.Package,
+		Version:  info.Version,
+		Release:  info.Release,
+		Arch:     info.Arch,
+		Size:     int64(len(data)),
+		SHA256:   info.SHA256,
+		SHA1:     info.SHA1,
+		MD5:      info.MD5,
+	}
+	if err := h.db.AddPackage(pkg); err != nil {
+		cleanupSavedFile()
+		jsonError(w, "db error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	h.queue.Enqueue(repo.ID)
+	detail, _ := json.Marshal(map[string]string{
+		"repo":    repo.Slug,
+		"version": info.Version,
+		"release": info.Release,
+		"arch":    info.Arch,
+	})
+	h.audit(currentUser(r), "upload", "package:"+filename, string(detail))
+	jsonOK(w, struct {
+		*storage.Package
+		Name string `json:"name"`
+	}{
+		Package: pkg,
+		Name:    pkg.Package,
+	}, http.StatusCreated)
+}
+
+type rpmFilenameInfo struct {
+	Package string
+	Version string
+	Release string
+	Arch    string
+	SHA256  string
+	SHA1    string
+	MD5     string
+}
+
+func parseRPMFilename(filename string, data []byte) (*rpmFilenameInfo, error) {
+	m := rpmFilenameRe.FindStringSubmatch(filename)
+	if m == nil {
+		return nil, fmt.Errorf("expected name-version-release.arch.rpm")
+	}
+	s256 := sha256.Sum256(data)
+	s1 := sha1.Sum(data) // #nosec G401 -- compatibility checksum
+	m5 := md5.Sum(data)  // #nosec G401 -- compatibility checksum
+	return &rpmFilenameInfo{
+		Package: m[1],
+		Version: m[2],
+		Release: m[3],
+		Arch:    m[4],
+		SHA256:  hex.EncodeToString(s256[:]),
+		SHA1:    hex.EncodeToString(s1[:]),
+		MD5:     hex.EncodeToString(m5[:]),
+	}, nil
+}
+
 func (h *Handler) listPackages(w http.ResponseWriter, r *http.Request) {
 	repoID := chi.URLParam(r, "id")
 	repo, err := h.db.GetRepo(repoID)
@@ -187,7 +302,13 @@ func (h *Handler) deletePackage(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "index regenerate error", http.StatusInternalServerError)
 		return
 	}
-	if err := h.fs.DeletePackageFile(repo.Slug, pkg.Package, pkg.Filename); err != nil && !errors.Is(err, os.ErrNotExist) {
+	var deleteErr error
+	if repo.Type == "rpm" {
+		deleteErr = h.fs.DeleteRPMPackageFile(repo.Slug, pkg.Filename)
+	} else {
+		deleteErr = h.fs.DeletePackageFile(repo.Slug, pkg.Package, pkg.Filename)
+	}
+	if deleteErr != nil && !errors.Is(deleteErr, os.ErrNotExist) {
 		jsonError(w, "package deleted but file cleanup failed", http.StatusInternalServerError)
 		return
 	}

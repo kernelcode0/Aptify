@@ -39,6 +39,7 @@ export interface Repo {
   slug: string
   name: string
   codename: string
+  type: 'deb' | 'rpm'
   created_at: string
 }
 
@@ -48,6 +49,7 @@ export interface Package {
   filename: string
   package: string
   version: string
+  release?: string
   arch: string
   size: number
   sha256: string
@@ -55,12 +57,15 @@ export interface Package {
 }
 
 export interface SetupInfo {
+  type: 'deb' | 'rpm'
   keyURL: string
   repoURL: string
-  codename: string
-  component: string
-  addKey: string
-  addSource: string
+  codename?: string
+  component?: string
+  addKey?: string
+  addSource?: string
+  install?: string
+  repoFile?: string
   update: string
 }
 
@@ -122,8 +127,8 @@ export const api = {
   checkAuth: () => req<CurrentUser>('GET', '/api/auth/check'),
   login: (username: string, password: string) => req<{ token: string }>('POST', '/api/auth/login', { username, password }),
   listRepos: () => req<Repo[]>('GET', '/api/repos'),
-  createRepo: (slug: string, name: string, codename: string) =>
-    req<Repo>('POST', '/api/repos', { slug, name, codename }),
+  createRepo: (slug: string, name: string, codename: string, type: Repo['type']) =>
+    req<Repo>('POST', '/api/repos', { slug, name, codename, type }),
   updateRepo: (id: string, name: string, codename: string) =>
     req<Repo>('PUT', `/api/repos/${id}`, { name, codename }),
   deleteRepo: (id: string) => req<void>('DELETE', `/api/repos/${id}`),

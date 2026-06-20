@@ -93,6 +93,7 @@ export default function RepoDetail() {
   const inputRef = useRef<HTMLInputElement>(null)
   const canManageRepo = user?.role === 'admin'
   const canManagePackages = user?.role === 'admin' || user?.role === 'member'
+  const packageExtension = repo?.type === 'rpm' ? '.rpm' : '.deb'
 
   const loadRepo = async () => {
     if (!id) return
@@ -140,8 +141,8 @@ export default function RepoDetail() {
   }, [id])
 
   const handleUpload = async (file: File) => {
-    if (!id || !file.name.endsWith('.deb')) {
-      setError('Only .deb files are accepted')
+    if (!id || !file.name.endsWith(packageExtension)) {
+      setError(`Only ${packageExtension} files are accepted`)
       return
     }
     setUploading(true)
@@ -231,7 +232,8 @@ export default function RepoDetail() {
           </div>
           <h1 className="detail-title">{repo?.name}</h1>
           <div className="detail-meta">
-            <span className="tag">{repo?.codename}</span>
+            <span className="tag">{repo?.type.toUpperCase()}</span>
+            {repo?.type === 'deb' && <span className="tag">{repo.codename}</span>}
             <span className="tag subtle">/{repo?.slug}</span>
             <span className="meta-dot" />
             <span className="muted-text">{totalPkgs} package{totalPkgs !== 1 ? 's' : ''}</span>
@@ -265,10 +267,12 @@ export default function RepoDetail() {
                 <label>Name</label>
                 <input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} required autoFocus />
               </div>
-              <div className="field">
-                <label>Codename</label>
-                <input value={editForm.codename} onChange={e => setEditForm(f => ({ ...f, codename: e.target.value }))} required />
-              </div>
+              {repo?.type === 'deb' && (
+                <div className="field">
+                  <label>Codename</label>
+                  <input value={editForm.codename} onChange={e => setEditForm(f => ({ ...f, codename: e.target.value }))} required />
+                </div>
+              )}
               <div className="form-actions">
                 <button type="submit" className="primary" disabled={saving}>
                   {saving
@@ -318,7 +322,7 @@ export default function RepoDetail() {
               onDrop={handleDrop}
               onClick={() => inputRef.current?.click()}
             >
-              <input ref={inputRef} type="file" accept=".deb" style={{ display: 'none' }}
+              <input ref={inputRef} type="file" accept={packageExtension} style={{ display: 'none' }}
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f) }} />
               {uploading ? (
                 <div className="upload-uploading">
@@ -332,7 +336,7 @@ export default function RepoDetail() {
                 <div className="upload-idle">
                   <span className="upload-icon"><UploadIcon /></span>
                   <div>
-                    <div className="upload-title">Drop a <code>.deb</code> file here</div>
+                    <div className="upload-title">Drop a <code>{packageExtension}</code> file here</div>
                     <div className="upload-sub">or click to browse your files</div>
                   </div>
                 </div>
@@ -344,7 +348,7 @@ export default function RepoDetail() {
             <div className="empty-state">
               <div className="empty-icon"><EmptyPackagesIcon /></div>
               <h3>No packages yet</h3>
-              <p>Upload a .deb file to add your first package.</p>
+              <p>Upload a {packageExtension} file to add your first package.</p>
             </div>
           ) : (
             <div className="package-table card">
@@ -353,6 +357,7 @@ export default function RepoDetail() {
                   <tr>
                     <th>Package</th>
                     <th>Version</th>
+                    {repo?.type === 'rpm' && <th>Release</th>}
                     <th>Arch</th>
                     <th>Size</th>
                     <th>Uploaded</th>
@@ -364,6 +369,7 @@ export default function RepoDetail() {
                     <tr key={p.id}>
                       <td><span className="pkg-name">{p.package}</span></td>
                       <td><code className="pkg-version">{p.version}</code></td>
+                      {repo?.type === 'rpm' && <td><code className="pkg-version">{p.release}</code></td>}
                       <td><span className="tag">{p.arch}</span></td>
                       <td className="muted-text">{formatBytes(p.size)}</td>
                       <td className="muted-text">{formatDate(p.uploaded_at)}</td>
@@ -405,16 +411,56 @@ export default function RepoDetail() {
 
 function SetupInstructions({ setup, slug, packages }: { setup: SetupInfo; slug: string; packages: Package[] }) {
   const examplePkg = packages.length > 0 ? packages[0].package : '<package-name>'
+  if (setup.type === 'rpm') {
+    return (
+      <div className="setup">
+        <p className="setup-intro">Add this repository to your system and install packages.</p>
+
+        <SetupStep n={1} title="Import the signing key">
+          <CopyBlock code={`sudo rpm --import ${setup.keyURL}`} />
+        </SetupStep>
+
+        <SetupStep n={2} title="Add the repository source">
+          <CopyBlock code={`cat <<'EOF' | sudo tee /etc/yum.repos.d/${slug}.repo\n${setup.repoFile}\nEOF`} />
+        </SetupStep>
+
+        <SetupStep n={3} title="Update package index">
+          <CopyBlock code={setup.update} />
+        </SetupStep>
+
+        <SetupStep n={4} title="Install a package">
+          <CopyBlock code={`sudo dnf install ${examplePkg}`} />
+        </SetupStep>
+
+        <div className="setup-details card">
+          <div className="setup-details-title">Repository details</div>
+          <table>
+            <tbody>
+              <tr><td className="info-label">Repository URL</td><td><code>{setup.repoURL}</code></td></tr>
+              <tr><td className="info-label">Type</td><td><code>RPM</code></td></tr>
+              <tr><td className="info-label">Signing key</td><td><a href={setup.keyURL}>{setup.keyURL}</a></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div className="setup-sources card">
+          <div className="setup-sources-label">/etc/yum.repos.d/{slug}.repo</div>
+          <pre>{setup.repoFile}</pre>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="setup">
       <p className="setup-intro">Add this repository to your system and install packages.</p>
 
       <SetupStep n={1} title="Import the signing key">
-        <CopyBlock code={setup.addKey} />
+        <CopyBlock code={setup.addKey ?? ''} />
       </SetupStep>
 
       <SetupStep n={2} title="Add the repository source">
-        <CopyBlock code={setup.addSource} />
+        <CopyBlock code={setup.addSource ?? ''} />
       </SetupStep>
 
       <SetupStep n={3} title="Update package index">
@@ -439,7 +485,7 @@ function SetupInstructions({ setup, slug, packages }: { setup: SetupInfo; slug: 
 
       <div className="setup-sources card">
         <div className="setup-sources-label">/etc/apt/sources.list.d/{slug}.list</div>
-        <pre>{setup.addSource.split('"')[1]}</pre>
+        <pre>{setup.addSource?.split('"')[1]}</pre>
       </div>
     </div>
   )

@@ -7,6 +7,7 @@ import (
 	"crypto/sha1" // #nosec G505
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/xml"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -34,6 +35,9 @@ func New(fs *storage.FileStore, signer *signing.Signer) *Generator {
 
 // Regenerate rebuilds Packages, Packages.gz, Release, and InRelease for the given repo.
 func (g *Generator) Regenerate(repo *storage.Repo, packages []storage.Package) error {
+	if repo.Type == "rpm" {
+		return g.regenerateRPM(repo, packages)
+	}
 	archs := []string{"amd64", "arm64", "all"}
 	indexes := make([]archIndex, 0, len(archs))
 	for _, arch := range archs {
@@ -78,6 +82,134 @@ func (g *Generator) Regenerate(repo *storage.Repo, packages []storage.Package) e
 		}
 	}
 	return nil
+}
+
+func (g *Generator) regenerateRPM(repo *storage.Repo, packages []storage.Package) error {
+	now := time.Now().Unix()
+	primary := buildRPMPrimary(packages)
+	filelists := buildRPMFilelists(packages)
+	other := buildRPMOther(packages)
+
+	primaryGz, err := gzipBytes(primary)
+	if err != nil {
+		return err
+	}
+	filelistsGz, err := gzipBytes(filelists)
+	if err != nil {
+		return err
+	}
+	otherGz, err := gzipBytes(other)
+	if err != nil {
+		return err
+	}
+
+	files := []rpmMetaFile{
+		{kind: "primary", href: "repodata/primary.xml.gz", data: primaryGz, openData: primary},
+		{kind: "filelists", href: "repodata/filelists.xml.gz", data: filelistsGz, openData: filelists},
+		{kind: "other", href: "repodata/other.xml.gz", data: otherGz, openData: other},
+	}
+	for _, fe := range files {
+		if err := storage.WriteFile(filepath.Join(g.fs.RepoDir(repo.Slug), fe.href), fe.data); err != nil {
+			return err
+		}
+	}
+	repomd := buildRepomd(files, now)
+	repomdPath := filepath.Join(g.fs.RepoDir(repo.Slug), "repodata", "repomd.xml")
+	if err := storage.WriteFile(repomdPath, repomd); err != nil {
+		return err
+	}
+	if g.signer != nil {
+		sig, err := g.signer.DetachSign(repomd)
+		if err != nil {
+			return fmt.Errorf("sign repomd: %w", err)
+		}
+		if err := storage.WriteFile(repomdPath+".asc", sig); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type rpmMetaFile struct {
+	kind     string
+	href     string
+	data     []byte
+	openData []byte
+}
+
+func buildRepomd(files []rpmMetaFile, timestamp int64) []byte {
+	var buf bytes.Buffer
+	buf.WriteString(xml.Header)
+	buf.WriteString(`<repomd xmlns="http://linux.duke.edu/metadata/repo">` + "\n")
+	for _, fe := range files {
+		sum := sha256.Sum256(fe.data)
+		openSum := sha256.Sum256(fe.openData)
+		fmt.Fprintf(&buf, `  <data type="%s">`+"\n", fe.kind)
+		fmt.Fprintf(&buf, `    <checksum type="sha256">%s</checksum>`+"\n", hex.EncodeToString(sum[:]))
+		fmt.Fprintf(&buf, `    <open-checksum type="sha256">%s</open-checksum>`+"\n", hex.EncodeToString(openSum[:]))
+		fmt.Fprintf(&buf, `    <location href="%s"/>`+"\n", fe.href)
+		fmt.Fprintf(&buf, "    <timestamp>%d</timestamp>\n", timestamp)
+		fmt.Fprintf(&buf, "    <size>%d</size>\n", len(fe.data))
+		fmt.Fprintf(&buf, "    <open-size>%d</open-size>\n", len(fe.openData))
+		buf.WriteString("  </data>\n")
+	}
+	buf.WriteString("</repomd>\n")
+	return buf.Bytes()
+}
+
+func buildRPMPrimary(packages []storage.Package) []byte {
+	var buf bytes.Buffer
+	buf.WriteString(xml.Header)
+	fmt.Fprintf(&buf, `<metadata xmlns="http://linux.duke.edu/metadata/common" packages="%d">`+"\n", len(packages))
+	for _, p := range packages {
+		fmt.Fprintf(&buf, `  <package type="rpm">`+"\n")
+		fmt.Fprintf(&buf, "    <name>%s</name>\n", xmlEscape(p.Package))
+		fmt.Fprintf(&buf, "    <arch>%s</arch>\n", xmlEscape(p.Arch))
+		fmt.Fprintf(&buf, `    <version epoch="0" ver="%s" rel="%s"/>`+"\n", xmlEscape(p.Version), xmlEscape(p.Release))
+		fmt.Fprintf(&buf, `    <checksum type="sha256" pkgid="YES">%s</checksum>`+"\n", p.SHA256)
+		fmt.Fprintf(&buf, "    <summary>%s</summary>\n", xmlEscape(p.Package))
+		fmt.Fprintf(&buf, "    <description>%s</description>\n", xmlEscape(p.Package))
+		fmt.Fprintf(&buf, "    <packager>Aptify</packager>\n")
+		fmt.Fprintf(&buf, `    <time file="%d" build="%d"/>`+"\n", p.UploadedAt.Unix(), p.UploadedAt.Unix())
+		fmt.Fprintf(&buf, `    <size package="%d" installed="%d" archive="%d"/>`+"\n", p.Size, p.Size, p.Size)
+		fmt.Fprintf(&buf, `    <location href="packages/%s"/>`+"\n", xmlEscape(p.Filename))
+		buf.WriteString("    <format/>\n")
+		buf.WriteString("  </package>\n")
+	}
+	buf.WriteString("</metadata>\n")
+	return buf.Bytes()
+}
+
+func buildRPMFilelists(packages []storage.Package) []byte {
+	var buf bytes.Buffer
+	buf.WriteString(xml.Header)
+	fmt.Fprintf(&buf, `<filelists xmlns="http://linux.duke.edu/metadata/filelists" packages="%d">`+"\n", len(packages))
+	for _, p := range packages {
+		fmt.Fprintf(&buf, `  <package pkgid="%s" name="%s" arch="%s">`+"\n", p.SHA256, xmlEscape(p.Package), xmlEscape(p.Arch))
+		fmt.Fprintf(&buf, `    <version epoch="0" ver="%s" rel="%s"/>`+"\n", xmlEscape(p.Version), xmlEscape(p.Release))
+		buf.WriteString("  </package>\n")
+	}
+	buf.WriteString("</filelists>\n")
+	return buf.Bytes()
+}
+
+func buildRPMOther(packages []storage.Package) []byte {
+	var buf bytes.Buffer
+	buf.WriteString(xml.Header)
+	fmt.Fprintf(&buf, `<otherdata xmlns="http://linux.duke.edu/metadata/other" packages="%d">`+"\n", len(packages))
+	for _, p := range packages {
+		fmt.Fprintf(&buf, `  <package pkgid="%s" name="%s" arch="%s">`+"\n", p.SHA256, xmlEscape(p.Package), xmlEscape(p.Arch))
+		fmt.Fprintf(&buf, `    <version epoch="0" ver="%s" rel="%s"/>`+"\n", xmlEscape(p.Version), xmlEscape(p.Release))
+		buf.WriteString("  </package>\n")
+	}
+	buf.WriteString("</otherdata>\n")
+	return buf.Bytes()
+}
+
+func xmlEscape(v string) string {
+	var buf bytes.Buffer
+	_ = xml.EscapeText(&buf, []byte(v))
+	return buf.String()
 }
 
 func packagesForArch(packages []storage.Package, arch string) []storage.Package {

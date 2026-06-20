@@ -62,7 +62,12 @@ export default function Dashboard() {
   const [repos, setRepos] = useState<Repo[]>([])
   const [loading, setLoading] = useState(true)
   const [showNew, setShowNew] = useState(false)
-  const [form, setForm] = useState({ slug: '', name: '', codename: 'stable' })
+  const [form, setForm] = useState<{ slug: string; name: string; codename: string; type: Repo['type'] }>({
+    slug: '',
+    name: '',
+    codename: 'stable',
+    type: 'deb',
+  })
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
   const navigate = useNavigate()
@@ -81,9 +86,9 @@ export default function Dashboard() {
     setCreating(true)
     setError('')
     try {
-      const repo = await api.createRepo(form.slug, form.name, form.codename)
+      const repo = await api.createRepo(form.slug, form.name, form.codename, form.type)
       setShowNew(false)
-      setForm({ slug: '', name: '', codename: 'stable' })
+      setForm({ slug: '', name: '', codename: 'stable', type: 'deb' })
       navigate(`/repos/${repo.id}`)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'unknown error')
@@ -152,8 +157,20 @@ export default function Dashboard() {
             </div>
             <form onSubmit={handleCreate} className="form-stack">
               <div className="field">
-                <label>Name</label>
+                <label htmlFor="repo-type">Repository type</label>
+                <select
+                  id="repo-type"
+                  value={form.type}
+                  onChange={e => setForm(f => ({ ...f, type: e.target.value as Repo['type'] }))}
+                >
+                  <option value="deb">DEB</option>
+                  <option value="rpm">RPM</option>
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="repo-name">Name</label>
                 <input
+                  id="repo-name"
                   value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                   placeholder="Ubuntu Developer Toolkit"
@@ -162,8 +179,9 @@ export default function Dashboard() {
                 />
               </div>
               <div className="field">
-                <label>Slug</label>
+                <label htmlFor="repo-slug">Slug</label>
                 <input
+                  id="repo-slug"
                   value={form.slug}
                   onChange={e => setForm(f => ({ ...f, slug: e.target.value.toLowerCase() }))}
                   placeholder="ubuntu-toolkit"
@@ -172,15 +190,18 @@ export default function Dashboard() {
                 />
                 <span className="field-hint">Lowercase letters, numbers, and hyphens only</span>
               </div>
-              <div className="field">
-                <label>Codename</label>
-                <input
-                  value={form.codename}
-                  onChange={e => setForm(f => ({ ...f, codename: e.target.value }))}
-                  placeholder="stable"
-                  required
-                />
-              </div>
+              {form.type === 'deb' && (
+                <div className="field">
+                  <label htmlFor="repo-codename">Codename</label>
+                  <input
+                    id="repo-codename"
+                    value={form.codename}
+                    onChange={e => setForm(f => ({ ...f, codename: e.target.value }))}
+                    placeholder="stable"
+                    required
+                  />
+                </div>
+              )}
               <div className="form-actions">
                 <button type="submit" className="primary" disabled={creating}>
                   {creating
@@ -226,14 +247,14 @@ export default function Dashboard() {
             <Link key={r.id} to={`/repos/${r.id}`} className="repo-card card">
               <div className="repo-card-header">
                 <span className="repo-card-icon"><RepoIcon /></span>
-                <span className="tag">{r.codename}</span>
+                <span className="tag">{r.type.toUpperCase()}</span>
               </div>
               <div className="repo-card-body">
                 <div className="repo-name">{r.name}</div>
                 <div className="repo-slug">/{r.slug}</div>
               </div>
               <div className="repo-card-footer">
-                <span className="repo-date">{formatDate(r.created_at)}</span>
+                <span className="repo-date">{r.type === 'deb' ? r.codename : 'yum/dnf'} · {formatDate(r.created_at)}</span>
               </div>
             </Link>
           ))}

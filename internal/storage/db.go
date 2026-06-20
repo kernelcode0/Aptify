@@ -53,6 +53,7 @@ type Repo struct {
 	Slug      string    `json:"slug"`
 	Name      string    `json:"name"`
 	Codename  string    `json:"codename"`
+	Type      string    `json:"type"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -63,6 +64,7 @@ type Package struct {
 	Filename    string    `json:"filename"`
 	Package     string    `json:"package"`
 	Version     string    `json:"version"`
+	Release     string    `json:"release,omitempty"`
 	Arch        string    `json:"arch"`
 	Size        int64     `json:"size"`
 	SHA256      string    `json:"sha256"`
@@ -119,6 +121,7 @@ func (d *DB) migrate() error {
 			slug        VARCHAR(255) UNIQUE NOT NULL,
 			name        VARCHAR(255) NOT NULL,
 			codename    VARCHAR(255) NOT NULL DEFAULT 'stable',
+			type        VARCHAR(16) NOT NULL DEFAULT 'deb',
 			created_at  DATETIME NOT NULL
 		);`
 		pkgTable = `
@@ -128,6 +131,7 @@ func (d *DB) migrate() error {
 			filename     VARCHAR(255) NOT NULL,
 			package      VARCHAR(255) NOT NULL,
 			version      VARCHAR(255) NOT NULL,
+			release      VARCHAR(255) NOT NULL DEFAULT '',
 			arch         VARCHAR(255) NOT NULL,
 			size         BIGINT NOT NULL,
 			sha256       VARCHAR(64) NOT NULL,
@@ -176,6 +180,7 @@ func (d *DB) migrate() error {
 			slug        TEXT UNIQUE NOT NULL,
 			name        TEXT NOT NULL,
 			codename    TEXT NOT NULL DEFAULT 'stable',
+			type        TEXT NOT NULL DEFAULT 'deb',
 			created_at  DATETIME NOT NULL
 		);`
 		pkgTable = `
@@ -185,6 +190,7 @@ func (d *DB) migrate() error {
 			filename     TEXT NOT NULL,
 			package      TEXT NOT NULL,
 			version      TEXT NOT NULL,
+			release      TEXT NOT NULL DEFAULT '',
 			arch         TEXT NOT NULL,
 			size         INTEGER NOT NULL,
 			sha256       TEXT NOT NULL,
@@ -233,6 +239,12 @@ func (d *DB) migrate() error {
 	if err := d.ensureUserRoleColumn(); err != nil {
 		return err
 	}
+	if err := d.ensureRepoTypeColumn(); err != nil {
+		return err
+	}
+	if err := d.ensurePackageReleaseColumn(); err != nil {
+		return err
+	}
 	if d.dbType == "sqlite" {
 		if _, err := d.db.Exec(`CREATE INDEX IF NOT EXISTS idx_packages_repo ON packages(repo_id);`); err != nil {
 			return err
@@ -245,6 +257,38 @@ func (d *DB) migrate() error {
 		}
 	}
 	return nil
+}
+
+func (d *DB) ensureRepoTypeColumn() error {
+	exists, err := d.columnExists("repos", "type")
+	if err != nil {
+		return err
+	}
+	if exists {
+		return nil
+	}
+	colType := "TEXT"
+	if d.dbType == "mysql" {
+		colType = "VARCHAR(16)"
+	}
+	_, err = d.db.Exec(`ALTER TABLE repos ADD COLUMN type ` + colType + ` NOT NULL DEFAULT 'deb'`)
+	return err
+}
+
+func (d *DB) ensurePackageReleaseColumn() error {
+	exists, err := d.columnExists("packages", "release")
+	if err != nil {
+		return err
+	}
+	if exists {
+		return nil
+	}
+	colType := "TEXT"
+	if d.dbType == "mysql" {
+		colType = "VARCHAR(255)"
+	}
+	_, err = d.db.Exec(`ALTER TABLE packages ADD COLUMN release ` + colType + ` NOT NULL DEFAULT ''`)
+	return err
 }
 
 func (d *DB) ensureUserRoleColumn() error {
@@ -377,17 +421,18 @@ func (d *DB) DeleteUser(id string) error {
 }
 
 // CreateRepo inserts a new repo and returns it.
-func (d *DB) CreateRepo(slug, name, codename string) (*Repo, error) {
+func (d *DB) CreateRepo(slug, name, codename, repoType string) (*Repo, error) {
 	r := &Repo{
 		ID:        uuid.NewString(),
 		Slug:      slug,
 		Name:      name,
 		Codename:  codename,
+		Type:      repoType,
 		CreatedAt: time.Now().UTC(),
 	}
 	_, err := d.db.Exec(
-		`INSERT INTO repos (id, slug, name, codename, created_at) VALUES (?,?,?,?,?)`,
-		r.ID, r.Slug, r.Name, r.Codename, r.CreatedAt,
+		`INSERT INTO repos (id, slug, name, codename, type, created_at) VALUES (?,?,?,?,?,?)`,
+		r.ID, r.Slug, r.Name, r.Codename, r.Type, r.CreatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create repo: %w", err)
@@ -399,8 +444,8 @@ func (d *DB) CreateRepo(slug, name, codename string) (*Repo, error) {
 func (d *DB) GetRepo(id string) (*Repo, error) {
 	r := &Repo{}
 	err := d.db.QueryRow(
-		`SELECT id, slug, name, codename, created_at FROM repos WHERE id=?`, id,
-	).Scan(&r.ID, &r.Slug, &r.Name, &r.Codename, &r.CreatedAt)
+		`SELECT id, slug, name, codename, type, created_at FROM repos WHERE id=?`, id,
+	).Scan(&r.ID, &r.Slug, &r.Name, &r.Codename, &r.Type, &r.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -411,8 +456,8 @@ func (d *DB) GetRepo(id string) (*Repo, error) {
 func (d *DB) GetRepoBySlug(slug string) (*Repo, error) {
 	r := &Repo{}
 	err := d.db.QueryRow(
-		`SELECT id, slug, name, codename, created_at FROM repos WHERE slug=?`, slug,
-	).Scan(&r.ID, &r.Slug, &r.Name, &r.Codename, &r.CreatedAt)
+		`SELECT id, slug, name, codename, type, created_at FROM repos WHERE slug=?`, slug,
+	).Scan(&r.ID, &r.Slug, &r.Name, &r.Codename, &r.Type, &r.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -421,7 +466,7 @@ func (d *DB) GetRepoBySlug(slug string) (*Repo, error) {
 
 // ListRepos returns all repos ordered by creation time.
 func (d *DB) ListRepos() ([]Repo, error) {
-	rows, err := d.db.Query(`SELECT id, slug, name, codename, created_at FROM repos ORDER BY created_at`)
+	rows, err := d.db.Query(`SELECT id, slug, name, codename, type, created_at FROM repos ORDER BY created_at`)
 	if err != nil {
 		return nil, err
 	}
@@ -429,7 +474,7 @@ func (d *DB) ListRepos() ([]Repo, error) {
 	var repos []Repo
 	for rows.Next() {
 		var r Repo
-		if err := rows.Scan(&r.ID, &r.Slug, &r.Name, &r.Codename, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.Slug, &r.Name, &r.Codename, &r.Type, &r.CreatedAt); err != nil {
 			return nil, err
 		}
 		repos = append(repos, r)
@@ -472,9 +517,9 @@ func (d *DB) AddPackage(p *Package) error {
 	p.ID = uuid.NewString()
 	p.UploadedAt = time.Now().UTC()
 	_, err := d.db.Exec(
-		`INSERT INTO packages (id, repo_id, filename, package, version, arch, size, sha256, sha1, md5, control_json, uploaded_at)
-		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-		p.ID, p.RepoID, p.Filename, p.Package, p.Version, p.Arch,
+		`INSERT INTO packages (id, repo_id, filename, package, version, release, arch, size, sha256, sha1, md5, control_json, uploaded_at)
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		p.ID, p.RepoID, p.Filename, p.Package, p.Version, p.Release, p.Arch,
 		p.Size, p.SHA256, p.SHA1, p.MD5, p.ControlJSON, p.UploadedAt,
 	)
 	return err
@@ -482,7 +527,7 @@ func (d *DB) AddPackage(p *Package) error {
 
 // ListPackages returns all packages for a repo. If limit > 0, it applies pagination.
 func (d *DB) ListPackages(repoID string, limit, offset int) ([]Package, error) {
-	query := `SELECT id, repo_id, filename, package, version, arch, size, sha256, sha1, md5, control_json, uploaded_at
+	query := `SELECT id, repo_id, filename, package, version, release, arch, size, sha256, sha1, md5, control_json, uploaded_at
 		 FROM packages WHERE repo_id=? ORDER BY uploaded_at DESC`
 
 	var rows *sql.Rows
@@ -501,7 +546,7 @@ func (d *DB) ListPackages(repoID string, limit, offset int) ([]Package, error) {
 	var pkgs []Package
 	for rows.Next() {
 		var p Package
-		if err := rows.Scan(&p.ID, &p.RepoID, &p.Filename, &p.Package, &p.Version, &p.Arch,
+		if err := rows.Scan(&p.ID, &p.RepoID, &p.Filename, &p.Package, &p.Version, &p.Release, &p.Arch,
 			&p.Size, &p.SHA256, &p.SHA1, &p.MD5, &p.ControlJSON, &p.UploadedAt); err != nil {
 			return nil, err
 		}
@@ -521,9 +566,9 @@ func (d *DB) CountPackages(repoID string) (int, error) {
 func (d *DB) GetPackage(id string) (*Package, error) {
 	p := &Package{}
 	err := d.db.QueryRow(
-		`SELECT id, repo_id, filename, package, version, arch, size, sha256, sha1, md5, control_json, uploaded_at
+		`SELECT id, repo_id, filename, package, version, release, arch, size, sha256, sha1, md5, control_json, uploaded_at
 		 FROM packages WHERE id=?`, id,
-	).Scan(&p.ID, &p.RepoID, &p.Filename, &p.Package, &p.Version, &p.Arch,
+	).Scan(&p.ID, &p.RepoID, &p.Filename, &p.Package, &p.Version, &p.Release, &p.Arch,
 		&p.Size, &p.SHA256, &p.SHA1, &p.MD5, &p.ControlJSON, &p.UploadedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
