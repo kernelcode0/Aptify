@@ -1,0 +1,53 @@
+version: "3.8"
+
+services:
+  aptify:
+    image: ${IMAGE:-aptify:latest}
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-v1.1.0}
+    volumes:
+      - apt-data:/data
+    environment:
+      - DATA_DIR=/data
+      - ADDR=:8080
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      # REQUIRED: Set ADMIN_PASSWORD to a strong unique password.
+      # Must be at least 8 characters; known defaults (admin123, etc.) are rejected.
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      # REQUIRED: Generate with: openssl rand -hex 32
+      # Must be at least 32 characters; known defaults are rejected.
+      - JWT_SECRET=${JWT_SECRET}
+      - KEY_NAME=${KEY_NAME:-APT Repository}
+      - KEY_EMAIL=${KEY_EMAIL:-ops@example.com}
+      # Optional: set BASE_URL to the public URL when behind a TLS reverse proxy.
+      # Example: BASE_URL=https://apt.mycompany.com
+      - BASE_URL=${BASE_URL:-}
+      # To use MySQL, set DB_TYPE=mysql and provide DB_DSN via environment.
+      # See .env.example for the DSN format. Do NOT put credentials here.
+      - DB_TYPE=${DB_TYPE:-sqlite}
+      - DB_DSN=${DB_DSN:-}
+    networks:
+      - traefik-public
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == worker
+      restart_policy:
+        condition: on-failure
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.aptify.rule=Host(`${BASE_URL:-apt.example.com}`)"
+        - "traefik.http.routers.aptify.entrypoints=http"
+        - "traefik.http.services.aptify.loadbalancer.server.port=8080"
+        - "traefik.docker.network=traefik-public"
+
+volumes:
+  apt-data:
+
+networks:
+  traefik-public:
+    external: true
