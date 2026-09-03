@@ -21,6 +21,15 @@ function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
 }
 
+function XIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18"/>
+      <line x1="6" y1="6" x2="18" y2="18"/>
+    </svg>
+  )
+}
+
 const roleContent: Record<Role, { name: string; summary: string; permissions: string[] }> = {
   admin: {
     name: 'Administrator',
@@ -241,11 +250,11 @@ export default function Profile() {
 
       {/* 2FA Setup Modal */}
       {modalType === 'setup' && setupData && (
-        <div className="modal-overlay" onClick={() => setModalType(null)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '540px' }}>
+        <div className="overlay" onClick={e => { if (e.target === e.currentTarget) setModalType(null) }}>
+          <div className="modal" style={{ maxWidth: '520px', maxHeight: '90vh', overflowY: 'auto' }}>
             <div className="modal-header">
               <h2>Set up Two-Factor Authentication</h2>
-              <button className="ghost icon-btn" onClick={() => setModalType(null)} aria-label="Close">✕</button>
+              <button className="modal-close" onClick={() => setModalType(null)} aria-label="Close"><XIcon /></button>
             </div>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {modalError && <div className="login-error" role="alert"><p>{modalError}</p></div>}
@@ -305,11 +314,11 @@ export default function Profile() {
 
       {/* 2FA Disable Modal */}
       {modalType === 'disable' && (
-        <div className="modal-overlay" onClick={() => setModalType(null)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '440px' }}>
+        <div className="overlay" onClick={e => { if (e.target === e.currentTarget) setModalType(null) }}>
+          <div className="modal" style={{ maxWidth: '440px' }}>
             <div className="modal-header">
               <h2>Disable Two-Factor Authentication</h2>
-              <button className="ghost icon-btn" onClick={() => setModalType(null)} aria-label="Close">✕</button>
+              <button className="modal-close" onClick={() => setModalType(null)} aria-label="Close"><XIcon /></button>
             </div>
             <form onSubmit={handleConfirmDisable} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               {modalError && <div className="login-error" role="alert"><p>{modalError}</p></div>}
@@ -351,11 +360,11 @@ export default function Profile() {
 
       {/* Regenerate Recovery Codes Modal */}
       {modalType === 'regen' && (
-        <div className="modal-overlay" onClick={() => setModalType(null)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+        <div className="overlay" onClick={e => { if (e.target === e.currentTarget) setModalType(null) }}>
+          <div className="modal" style={{ maxWidth: '480px', maxHeight: '90vh', overflowY: 'auto' }}>
             <div className="modal-header">
               <h2>{newRecoveryCodes ? 'Your new recovery codes' : 'Regenerate recovery codes'}</h2>
-              <button className="ghost icon-btn" onClick={() => setModalType(null)} aria-label="Close">✕</button>
+              <button className="modal-close" onClick={() => setModalType(null)} aria-label="Close"><XIcon /></button>
             </div>
             <div className="modal-body">
               {modalError && <div className="login-error" role="alert" style={{ marginBottom: '12px' }}><p>{modalError}</p></div>}

@@ -119,7 +119,6 @@ func (d *DB) migrate() error {
 			password_hash       VARCHAR(255) NOT NULL,
 			totp_enabled        TINYINT(1) NOT NULL DEFAULT 0,
 			totp_secret         VARCHAR(64) NOT NULL DEFAULT '',
-			totp_recovery_codes TEXT NOT NULL DEFAULT '[]',
 			totp_recovery_codes TEXT,
 			created_at          DATETIME NOT NULL
 		);`
@@ -360,9 +359,6 @@ func (d *DB) ensureUser2FAColumns() error {
 		return err
 	}
 	if !hasCodes {
-		colType := "TEXT NOT NULL DEFAULT '[]'"
-		if _, err := d.db.Exec(`ALTER TABLE users ADD COLUMN totp_recovery_codes ` + colType); err != nil {
-			return err
 		if d.dbType == "mysql" {
 			if _, err := d.db.Exec(`ALTER TABLE users ADD COLUMN totp_recovery_codes TEXT`); err != nil {
 				return err
@@ -419,7 +415,6 @@ func (d *DB) columnExists(table, column string) (bool, error) {
 func (d *DB) GetUserByUsername(username string) (*User, error) {
 	u := &User{}
 	err := d.db.QueryRow(
-		`SELECT id, username, role, password_hash, totp_enabled, totp_secret, totp_recovery_codes, created_at FROM users WHERE username=?`, username,
 		`SELECT id, username, role, password_hash, totp_enabled, COALESCE(totp_secret, ''), COALESCE(totp_recovery_codes, '[]'), created_at FROM users WHERE username=?`, username,
 	).Scan(&u.ID, &u.Username, &u.Role, &u.PasswordHash, &u.TOTPEnabled, &u.TOTPSecret, &u.TOTPRecoveryCodes, &u.CreatedAt)
 	if err == sql.ErrNoRows {
@@ -472,7 +467,6 @@ func (d *DB) ListUsers() ([]User, error) {
 func (d *DB) GetUserByID(id string) (*User, error) {
 	u := &User{}
 	err := d.db.QueryRow(
-		`SELECT id, username, role, password_hash, totp_enabled, totp_secret, totp_recovery_codes, created_at FROM users WHERE id=?`, id,
 		`SELECT id, username, role, password_hash, totp_enabled, COALESCE(totp_secret, ''), COALESCE(totp_recovery_codes, '[]'), created_at FROM users WHERE id=?`, id,
 	).Scan(&u.ID, &u.Username, &u.Role, &u.PasswordHash, &u.TOTPEnabled, &u.TOTPSecret, &u.TOTPRecoveryCodes, &u.CreatedAt)
 	if err == sql.ErrNoRows {
