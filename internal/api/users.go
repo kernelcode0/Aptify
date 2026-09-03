@@ -158,3 +158,20 @@ func (h *Handler) deleteUser(w http.ResponseWriter, r *http.Request) {
 	h.audit(current, "delete_user", "user:"+user.Username, "")
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (h *Handler) resetUser2FA(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	targetUser, err := h.db.GetUserByID(id)
+	if err != nil || targetUser == nil {
+		jsonError(w, "user not found", http.StatusNotFound)
+		return
+	}
+
+	if err := h.db.ResetUser2FA(targetUser.ID); err != nil {
+		jsonError(w, "db error", http.StatusInternalServerError)
+		return
+	}
+
+	h.audit(currentUser(r), "reset_user_2fa", "user:"+targetUser.Username, "")
+	jsonOK(w, map[string]string{"status": "ok"}, http.StatusOK)
+}

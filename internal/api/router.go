@@ -45,7 +45,7 @@ func (h *Handler) Router(spa http.Handler) http.Handler {
 	r.Use(middleware.Recoverer)
 	r.Use(SecurityHeaders)
 	r.Use(CSRFProtection)
-	
+
 	rl := newRateLimiter()
 
 	// Public endpoints — no auth.
@@ -56,13 +56,18 @@ func (h *Handler) Router(spa http.Handler) http.Handler {
 	r.Get("/repo/{slug}/repodata/*", h.serveRepoFile)
 	r.Get("/repo/{slug}/packages/*", h.serveRepoFile)
 
-	// Auth endpoint
+	// Auth endpoints
 	r.With(rl.RateLimit).Post("/api/auth/login", h.login)
+	r.With(rl.RateLimit).Post("/api/auth/2fa/verify", h.verify2FA)
 
 	// Admin API — protected by JWT or API key.
 	r.Group(func(r chi.Router) {
 		r.Use(h.authMiddleware)
 		r.Get("/api/auth/check", h.authCheck)
+		r.Post("/api/auth/2fa/setup", h.setup2FA)
+		r.Post("/api/auth/2fa/enable", h.enable2FA)
+		r.Post("/api/auth/2fa/disable", h.disable2FA)
+		r.Post("/api/auth/2fa/recovery-codes", h.regenerateRecoveryCodes)
 		r.Post("/api/auth/keys", h.createAPIKey)
 		r.Get("/api/auth/keys", h.listAPIKeys)
 		r.Delete("/api/auth/keys/{keyID}", h.deleteAPIKey)
@@ -79,6 +84,7 @@ func (h *Handler) Router(spa http.Handler) http.Handler {
 		r.With(RequireRole("admin")).Post("/api/users", h.createUser)
 		r.With(RequireRole("admin")).Put("/api/users/{id}", h.updateUser)
 		r.With(RequireRole("admin")).Delete("/api/users/{id}", h.deleteUser)
+		r.With(RequireRole("admin")).Post("/api/users/{id}/reset-2fa", h.resetUser2FA)
 		r.With(RequireRole("admin")).Get("/api/audit", h.listAuditLog)
 		r.With(RequireRole("admin")).Delete("/api/audit", h.clearAuditLog)
 		r.Get("/api/system/gpg-key", h.exportGPGKey)
@@ -118,6 +124,10 @@ func (h *Handler) authMiddleware(next http.Handler) http.Handler {
 		if err == nil && token.Valid {
 			claims, ok := token.Claims.(jwt.MapClaims)
 			if !ok {
+				jsonError(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+			if purpose, _ := claims["purpose"].(string); purpose == "2fa_preauth" {
 				jsonError(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}

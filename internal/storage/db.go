@@ -30,11 +30,14 @@ type APIKey struct {
 
 // User represents an administrator user.
 type User struct {
-	ID           string    `json:"id"`
-	Username     string    `json:"username"`
-	Role         string    `json:"role"`
-	PasswordHash string    `json:"-"`
-	CreatedAt    time.Time `json:"created_at"`
+	ID                string    `json:"id"`
+	Username          string    `json:"username"`
+	Role              string    `json:"role"`
+	PasswordHash      string    `json:"-"`
+	TOTPEnabled       bool      `json:"two_factor_enabled"`
+	TOTPSecret        string    `json:"-"`
+	TOTPRecoveryCodes string    `json:"-"`
+	CreatedAt         time.Time `json:"created_at"`
 }
 
 // AuditEntry represents one immutable audit log record.
@@ -110,11 +113,15 @@ func (d *DB) migrate() error {
 	if d.dbType == "mysql" {
 		userTable = `
 		CREATE TABLE IF NOT EXISTS users (
-			id            VARCHAR(36) PRIMARY KEY,
-			username      VARCHAR(255) UNIQUE NOT NULL,
-			role          VARCHAR(32) NOT NULL DEFAULT 'viewer',
-			password_hash VARCHAR(255) NOT NULL,
-			created_at    DATETIME NOT NULL
+			id                  VARCHAR(36) PRIMARY KEY,
+			username            VARCHAR(255) UNIQUE NOT NULL,
+			role                VARCHAR(32) NOT NULL DEFAULT 'viewer',
+			password_hash       VARCHAR(255) NOT NULL,
+			totp_enabled        TINYINT(1) NOT NULL DEFAULT 0,
+			totp_secret         VARCHAR(64) NOT NULL DEFAULT '',
+			totp_recovery_codes TEXT NOT NULL DEFAULT '[]',
+			totp_recovery_codes TEXT,
+			created_at          DATETIME NOT NULL
 		);`
 		repoTable = `
 		CREATE TABLE IF NOT EXISTS repos (
@@ -170,11 +177,14 @@ func (d *DB) migrate() error {
 	} else {
 		userTable = `
 		CREATE TABLE IF NOT EXISTS users (
-			id            TEXT PRIMARY KEY,
-			username      TEXT UNIQUE NOT NULL,
-			role          TEXT NOT NULL DEFAULT 'viewer',
-			password_hash TEXT NOT NULL,
-			created_at    DATETIME NOT NULL
+			id                  TEXT PRIMARY KEY,
+			username            TEXT UNIQUE NOT NULL,
+			role                TEXT NOT NULL DEFAULT 'viewer',
+			password_hash       TEXT NOT NULL,
+			totp_enabled        INTEGER NOT NULL DEFAULT 0,
+			totp_secret         TEXT NOT NULL DEFAULT '',
+			totp_recovery_codes TEXT NOT NULL DEFAULT '[]',
+			created_at          DATETIME NOT NULL
 		);`
 		repoTable = `
 		CREATE TABLE IF NOT EXISTS repos (
@@ -240,6 +250,9 @@ func (d *DB) migrate() error {
 		return err
 	}
 	if err := d.ensureUserRoleColumn(); err != nil {
+		return err
+	}
+	if err := d.ensureUser2FAColumns(); err != nil {
 		return err
 	}
 	if err := d.ensureRepoTypeColumn(); err != nil {
@@ -313,6 +326,57 @@ func (d *DB) ensureUserRoleColumn() error {
 	return err
 }
 
+func (d *DB) ensureUser2FAColumns() error {
+	hasEnabled, err := d.columnExists("users", "totp_enabled")
+	if err != nil {
+		return err
+	}
+	if !hasEnabled {
+		colType := "INTEGER NOT NULL DEFAULT 0"
+		if d.dbType == "mysql" {
+			colType = "TINYINT(1) NOT NULL DEFAULT 0"
+		}
+		if _, err := d.db.Exec(`ALTER TABLE users ADD COLUMN totp_enabled ` + colType); err != nil {
+			return err
+		}
+	}
+
+	hasSecret, err := d.columnExists("users", "totp_secret")
+	if err != nil {
+		return err
+	}
+	if !hasSecret {
+		colType := "TEXT NOT NULL DEFAULT ''"
+		if d.dbType == "mysql" {
+			colType = "VARCHAR(64) NOT NULL DEFAULT ''"
+		}
+		if _, err := d.db.Exec(`ALTER TABLE users ADD COLUMN totp_secret ` + colType); err != nil {
+			return err
+		}
+	}
+
+	hasCodes, err := d.columnExists("users", "totp_recovery_codes")
+	if err != nil {
+		return err
+	}
+	if !hasCodes {
+		colType := "TEXT NOT NULL DEFAULT '[]'"
+		if _, err := d.db.Exec(`ALTER TABLE users ADD COLUMN totp_recovery_codes ` + colType); err != nil {
+			return err
+		if d.dbType == "mysql" {
+			if _, err := d.db.Exec(`ALTER TABLE users ADD COLUMN totp_recovery_codes TEXT`); err != nil {
+				return err
+			}
+			_, _ = d.db.Exec(`UPDATE users SET totp_recovery_codes='[]' WHERE totp_recovery_codes IS NULL OR totp_recovery_codes=''`)
+		} else {
+			if _, err := d.db.Exec(`ALTER TABLE users ADD COLUMN totp_recovery_codes TEXT NOT NULL DEFAULT '[]'`); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (d *DB) columnExists(table, column string) (bool, error) {
 	// Whitelist table names to prevent SQL injection via string concatenation
 	validTables := map[string]bool{"users": true, "repos": true, "packages": true, "api_keys": true, "audit_log": true}
@@ -331,6 +395,7 @@ func (d *DB) columnExists(table, column string) (bool, error) {
 		return false, err
 	}
 	defer rows.Close()
+
 	if d.dbType == "mysql" {
 		return rows.Next(), rows.Err()
 	}
@@ -354,8 +419,9 @@ func (d *DB) columnExists(table, column string) (bool, error) {
 func (d *DB) GetUserByUsername(username string) (*User, error) {
 	u := &User{}
 	err := d.db.QueryRow(
-		`SELECT id, username, role, password_hash, created_at FROM users WHERE username=?`, username,
-	).Scan(&u.ID, &u.Username, &u.Role, &u.PasswordHash, &u.CreatedAt)
+		`SELECT id, username, role, password_hash, totp_enabled, totp_secret, totp_recovery_codes, created_at FROM users WHERE username=?`, username,
+		`SELECT id, username, role, password_hash, totp_enabled, COALESCE(totp_secret, ''), COALESCE(totp_recovery_codes, '[]'), created_at FROM users WHERE username=?`, username,
+	).Scan(&u.ID, &u.Username, &u.Role, &u.PasswordHash, &u.TOTPEnabled, &u.TOTPSecret, &u.TOTPRecoveryCodes, &u.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -365,14 +431,17 @@ func (d *DB) GetUserByUsername(username string) (*User, error) {
 // CreateUser inserts a new user.
 func (d *DB) CreateUser(username, passwordHash, role string) (*User, error) {
 	u := &User{
-		ID:           uuid.NewString(),
-		Username:     username,
-		Role:         role,
-		PasswordHash: passwordHash,
-		CreatedAt:    time.Now().UTC(),
+		ID:                uuid.NewString(),
+		Username:          username,
+		Role:              role,
+		PasswordHash:      passwordHash,
+		TOTPEnabled:       false,
+		TOTPSecret:        "",
+		TOTPRecoveryCodes: "[]",
+		CreatedAt:         time.Now().UTC(),
 	}
 	_, err := d.db.Exec(
-		`INSERT INTO users (id, username, role, password_hash, created_at) VALUES (?,?,?,?,?)`,
+		`INSERT INTO users (id, username, role, password_hash, totp_enabled, totp_secret, totp_recovery_codes, created_at) VALUES (?,?,?,?,0,'','[]',?)`,
 		u.ID, u.Username, u.Role, u.PasswordHash, u.CreatedAt,
 	)
 	if err != nil {
@@ -383,7 +452,7 @@ func (d *DB) CreateUser(username, passwordHash, role string) (*User, error) {
 
 // ListUsers returns all users ordered by creation time.
 func (d *DB) ListUsers() ([]User, error) {
-	rows, err := d.db.Query(`SELECT id, username, role, created_at FROM users ORDER BY created_at`)
+	rows, err := d.db.Query(`SELECT id, username, role, totp_enabled, created_at FROM users ORDER BY created_at`)
 	if err != nil {
 		return nil, err
 	}
@@ -391,7 +460,7 @@ func (d *DB) ListUsers() ([]User, error) {
 	var users []User
 	for rows.Next() {
 		var u User
-		if err := rows.Scan(&u.ID, &u.Username, &u.Role, &u.CreatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Username, &u.Role, &u.TOTPEnabled, &u.CreatedAt); err != nil {
 			return nil, err
 		}
 		users = append(users, u)
@@ -403,8 +472,9 @@ func (d *DB) ListUsers() ([]User, error) {
 func (d *DB) GetUserByID(id string) (*User, error) {
 	u := &User{}
 	err := d.db.QueryRow(
-		`SELECT id, username, role, password_hash, created_at FROM users WHERE id=?`, id,
-	).Scan(&u.ID, &u.Username, &u.Role, &u.PasswordHash, &u.CreatedAt)
+		`SELECT id, username, role, password_hash, totp_enabled, totp_secret, totp_recovery_codes, created_at FROM users WHERE id=?`, id,
+		`SELECT id, username, role, password_hash, totp_enabled, COALESCE(totp_secret, ''), COALESCE(totp_recovery_codes, '[]'), created_at FROM users WHERE id=?`, id,
+	).Scan(&u.ID, &u.Username, &u.Role, &u.PasswordHash, &u.TOTPEnabled, &u.TOTPSecret, &u.TOTPRecoveryCodes, &u.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -421,6 +491,27 @@ func (d *DB) UpdateUserRole(id, role string) error {
 func (d *DB) UpdateUserPassword(id, passwordHash string) error {
 	_, err := d.db.Exec(`UPDATE users SET password_hash=? WHERE id=?`, passwordHash, id)
 	return err
+}
+
+// UpdateUser2FA updates 2FA status, secret, and recovery codes for a user.
+func (d *DB) UpdateUser2FA(id string, enabled bool, secret, recoveryCodes string) error {
+	var enabledVal any = 0
+	if enabled {
+		enabledVal = 1
+	}
+	_, err := d.db.Exec(`UPDATE users SET totp_enabled=?, totp_secret=?, totp_recovery_codes=? WHERE id=?`, enabledVal, secret, recoveryCodes, id)
+	return err
+}
+
+// UpdateUserRecoveryCodes updates only the recovery codes for a user.
+func (d *DB) UpdateUserRecoveryCodes(id string, recoveryCodes string) error {
+	_, err := d.db.Exec(`UPDATE users SET totp_recovery_codes=? WHERE id=?`, recoveryCodes, id)
+	return err
+}
+
+// ResetUser2FA disables 2FA and clears secrets for a user.
+func (d *DB) ResetUser2FA(id string) error {
+	return d.UpdateUser2FA(id, false, "", "[]")
 }
 
 // DeleteUser removes a user and cascades their API keys.
