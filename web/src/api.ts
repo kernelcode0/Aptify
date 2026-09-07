@@ -99,13 +99,27 @@ export interface CurrentUser {
   user_id: string
   username: string
   role: Role
+  two_factor_enabled?: boolean
 }
 
 export interface User {
   id: string
   username: string
   role: Role
+  two_factor_enabled?: boolean
   created_at: string
+}
+
+export interface Setup2FAResponse {
+  secret: string
+  otpauth_url: string
+  qr_code: string
+  recovery_codes: string[]
+}
+
+export interface LoginResponse {
+  status: 'ok' | '2fa_required'
+  pre_auth_token?: string
 }
 
 export interface AuditEntry {
@@ -125,7 +139,18 @@ export interface AuditList {
 
 export const api = {
   checkAuth: () => req<CurrentUser>('GET', '/api/auth/check'),
-  login: (username: string, password: string) => req<{ token: string }>('POST', '/api/auth/login', { username, password }),
+  login: (username: string, password: string, code?: string) =>
+    req<LoginResponse>('POST', '/api/auth/login', { username, password, code }),
+  verify2FA: (preAuthToken: string, code: string) =>
+    req<{ status: string }>('POST', '/api/auth/2fa/verify', { pre_auth_token: preAuthToken, code }),
+  setup2FA: () => req<Setup2FAResponse>('POST', '/api/auth/2fa/setup'),
+  enable2FA: (code: string) => req<{ status: string }>('POST', '/api/auth/2fa/enable', { code }),
+  disable2FA: (password: string, code: string) =>
+    req<{ status: string }>('POST', '/api/auth/2fa/disable', { password, code }),
+  regenerateRecoveryCodes: (password: string) =>
+    req<{ recovery_codes: string[] }>('POST', '/api/auth/2fa/recovery-codes', { password }),
+  resetUser2FA: (userId: string) =>
+    req<{ status: string }>('POST', `/api/users/${userId}/reset-2fa`),
   listRepos: () => req<Repo[]>('GET', '/api/repos'),
   createRepo: (slug: string, name: string, codename: string, type: Repo['type']) =>
     req<Repo>('POST', '/api/repos', { slug, name, codename, type }),

@@ -30,21 +30,43 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [step, setStep] = useState<'credentials' | '2fa'>('credentials')
+  const [preAuthToken, setPreAuthToken] = useState('')
+  const [twoFactorCode, setTwoFactorCode] = useState('')
+  const [useRecovery, setUseRecovery] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleCredentialsSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
     try {
-      // The server sets an HttpOnly session cookie on successful login.
-      // No token is stored client-side.
-      await api.login(username, password)
+      const res = await api.login(username, password)
+      if (res.status === '2fa_required' && res.pre_auth_token) {
+        setPreAuthToken(res.pre_auth_token)
+        setStep('2fa')
+        return
+      }
       const from = (location.state as { from?: { pathname?: string } })?.from?.pathname || '/'
       navigate(from, { replace: true })
     } catch {
       setError('The username or password you entered is incorrect.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handle2FASubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    try {
+      await api.verify2FA(preAuthToken, twoFactorCode)
+      const from = (location.state as { from?: { pathname?: string } })?.from?.pathname || '/'
+      navigate(from, { replace: true })
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Invalid verification code')
     } finally {
       setLoading(false)
     }
@@ -83,28 +105,82 @@ export default function Login() {
     <section className="login-access">
       <div className="access-topline"><span><i/>Secure administrator access</span><small>APTIFY / AUTH</small></div>
       <div className="login-card">
-        <div className="login-heading">
-          <div className="login-heading-icon"><Icon name="lock" size={19}/></div>
-          <span>Welcome back</span>
-          <h2>Sign in to Aptify</h2>
-          <p>Enter your workspace credentials to continue.</p>
-        </div>
+        {step === 'credentials' ? (
+          <>
+            <div className="login-heading">
+              <div className="login-heading-icon"><Icon name="lock" size={19}/></div>
+              <span>Welcome back</span>
+              <h2>Sign in to Aptify</h2>
+              <p>Enter your workspace credentials to continue.</p>
+            </div>
 
-        {error && <div className="login-error" role="alert"><Icon name="alert"/><span><strong>Sign-in failed</strong>{error}</span></div>}
+            {error && <div className="login-error" role="alert"><Icon name="alert"/><span><strong>Sign-in failed</strong>{error}</span></div>}
 
-        <form onSubmit={handleSubmit} className="login-form">
-          <label className="login-field" htmlFor="username">
-            <span>Username</span>
-            <div className="login-input"><Icon name="user"/><input id="username" type="text" value={username} onChange={e => setUsername(e.target.value)} placeholder="Enter your username" autoComplete="username" autoCapitalize="none" spellCheck={false} autoFocus required /></div>
-          </label>
-          <label className="login-field" htmlFor="password">
-            <span>Password</span>
-            <div className="login-input"><Icon name="lock"/><input id="password" type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="Enter your password" autoComplete="current-password" required /><button type="button" onClick={() => setShowPassword(show => !show)} aria-label={showPassword ? 'Hide password' : 'Show password'}><Icon name={showPassword ? 'eyeOff' : 'eye'}/></button></div>
-          </label>
-          <button type="submit" className="login-submit" disabled={loading}>
-            {loading ? <><span className="spinner login-spinner"/>Verifying credentials…</> : <><span>Continue to workspace</span><i><Icon name="arrow" size={15}/></i></>}
-          </button>
-        </form>
+            <form onSubmit={handleCredentialsSubmit} className="login-form">
+              <label className="login-field" htmlFor="username">
+                <span>Username</span>
+                <div className="login-input"><Icon name="user"/><input id="username" type="text" value={username} onChange={e => setUsername(e.target.value)} placeholder="Enter your username" autoComplete="username" autoCapitalize="none" spellCheck={false} autoFocus required /></div>
+              </label>
+              <label className="login-field" htmlFor="password">
+                <span>Password</span>
+                <div className="login-input"><Icon name="lock"/><input id="password" type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="Enter your password" autoComplete="current-password" required /><button type="button" onClick={() => setShowPassword(show => !show)} aria-label={showPassword ? 'Hide password' : 'Show password'}><Icon name={showPassword ? 'eyeOff' : 'eye'}/></button></div>
+              </label>
+              <button type="submit" className="login-submit" disabled={loading}>
+                {loading ? <><span className="spinner login-spinner"/>Verifying credentials…</> : <><span>Continue to workspace</span><i><Icon name="arrow" size={15}/></i></>}
+              </button>
+            </form>
+          </>
+        ) : (
+          <>
+            <div className="login-heading">
+              <div className="login-heading-icon"><Icon name="shield" size={19}/></div>
+              <span>Two-factor challenge</span>
+              <h2>Two-factor authentication</h2>
+              <p>{useRecovery ? 'Enter an emergency single-use recovery code.' : 'Enter the 6-digit code from your authenticator app.'}</p>
+            </div>
+
+            {error && <div className="login-error" role="alert"><Icon name="alert"/><span><strong>Verification failed</strong>{error}</span></div>}
+
+            <form onSubmit={handle2FASubmit} className="login-form">
+              <label className="login-field" htmlFor="twofactor">
+                <span>{useRecovery ? 'Recovery code' : '6-digit authentication code'}</span>
+                <div className="login-input">
+                  <Icon name="lock"/>
+                  <input
+                    id="twofactor"
+                    type="text"
+                    value={twoFactorCode}
+                    onChange={e => setTwoFactorCode(e.target.value)}
+                    placeholder={useRecovery ? 'xxxx-xxxx' : '123456'}
+                    autoFocus
+                    required
+                    maxLength={useRecovery ? 16 : 8}
+                    autoComplete="one-time-code"
+                  />
+                </div>
+              </label>
+              <button type="submit" className="login-submit" disabled={loading}>
+                {loading ? <><span className="spinner login-spinner"/>Verifying code…</> : <><span>Verify and sign in</span><i><Icon name="arrow" size={15}/></i></>}
+              </button>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.75rem', fontSize: '0.85rem' }}>
+                <button
+                  type="button"
+                  style={{ background: 'none', border: 'none', color: '#5eead4', cursor: 'pointer', padding: 0 }}
+                  onClick={() => { setUseRecovery(prev => !prev); setError(''); setTwoFactorCode('') }}
+                >
+                  {useRecovery ? 'Use authenticator app code' : 'Use a recovery code'}
+                </button>
+                <button
+                  type="button"
+                  style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0 }}
+                  onClick={() => { setStep('credentials'); setError(''); setTwoFactorCode('') }}
+                >
+                  Back to login
+                </button>
+              </div>
+            </form>
+          </>
+        )}
 
         <div className="login-security"><Icon name="shield" size={14}/><span>Your credentials are sent securely to your Aptify server.</span></div>
       </div>
