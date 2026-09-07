@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aptify</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #05070b;
+      --teal: #2dd4bf;
+      --teal-bright: #5eead4;
+      --teal-glow: rgba(45, 212, 191, 0.35);
+      --amber: #fbbf24;
+      --text: #f1f5f9;
+      --muted: #64748b;
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+    }
+
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+    }
+
+    /* ─── STARFIELD CANVAS ─── */
+    canvas#stars {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+    }
+
+    /* ─── DIAGONAL SPLIT SLASH ─── */
+    .slash-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .slash-bar {
+      position: absolute;
+      top: -20%;
+      left: 46%;
+      width: 3px;
+      height: 160%;
+      background: linear-gradient(180deg,
+        transparent 0%,
+        rgba(45, 212, 191, 0.12) 20%,
+        rgba(45, 212, 191, 0.5) 50%,
+        rgba(45, 212, 191, 0.12) 80%,
+        transparent 100%
+      );
+      transform: rotate(18deg);
+      transform-origin: center;
+    }
+    .slash-bar::before {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      background: inherit;
+      filter: blur(12px);
+      opacity: 0.5;
+    }
+
+    /* ─── FULL PAGE LAYOUT ─── */
+    .page {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      height: 100%;
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+    }
+
+    /* ─── LEFT: STORY SIDE ─── */
+    .story {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 44px clamp(36px, 5vw, 88px);
+      overflow: hidden;
+    }
+
+    /* Floating package nodes (CSS only) */
+    .pkg-node {
+      position: absolute;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 12px;
+      background: rgba(13, 17, 24, 0.7);
+      border: 1px solid rgba(45, 212, 191, 0.2);
+      border-radius: 99px;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--teal-bright);
+      backdrop-filter: blur(12px);
+      animation: floatNode linear infinite;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+    .pkg-node::before {
+      content: '';
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--teal);
+      box-shadow: 0 0 8px var(--teal);
+      flex-shrink: 0;
+    }
+
+    @keyframes floatNode {
+      0%   { transform: translateY(0px) translateX(0px); opacity: 0; }
+      10%  { opacity: 1; }
+      90%  { opacity: 1; }
+      100% { transform: translateY(-85vh) translateX(20px); opacity: 0; }
+    }
+
+    .n1  { bottom: -40px; left: 8%;  animation-duration: 16s; animation-delay: 0s; }
+    .n2  { bottom: -40px; left: 22%; animation-duration: 20s; animation-delay: 4s; }
+    .n3  { bottom: -40px; left: 35%; animation-duration: 14s; animation-delay: 8s; }
+    .n4  { bottom: -40px; left: 12%; animation-duration: 22s; animation-delay: 2s; }
+    .n5  { bottom: -40px; left: 28%; animation-duration: 18s; animation-delay: 6s; }
+    .n6  { bottom: -40px; left: 42%; animation-duration: 25s; animation-delay: 11s; }
+
+    .story-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-icon {
+      width: 38px; height: 38px;
+      background: #111722;
+      border: 1px solid rgba(45, 212, 191, 0.35);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 18px rgba(45, 212, 191, 0.2);
+    }
+    .brand-text strong {
+      font-size: 17px; font-weight: 800; color: #fff; display: block;
+    }
+    .brand-text em {
+      font-style: normal; font-size: 9px; font-weight: 700;
+      letter-spacing: 0.12em; color: var(--teal); text-transform: uppercase;
+    }
+
+    .uptime-badge {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      color: var(--muted);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .heartbeat {
+      width: 22px; height: 16px;
+      display: inline-flex; align-items: center;
+    }
+    .heartbeat svg { animation: heartbeat 1.6s ease-in-out infinite; }
+    @keyframes heartbeat {
+      0%,100% { transform: scaleY(1); }
+      40%      { transform: scaleY(1.4); }
+      60%      { transform: scaleY(0.9); }
+    }
+
+    /* ─── HERO COPY ─── */
+    .story-hero {
+      margin: auto 0;
+    }
+
+    .pretext {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--teal);
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .pretext::before {
+      content: '▶';
+      font-size: 8px;
+      animation: blink 1.4s step-end infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    .headline {
+      font-size: clamp(38px, 4.5vw, 70px);
+      font-weight: 850;
+      line-height: 0.98;
+      letter-spacing: -0.055em;
+      color: #fff;
+      margin-bottom: 16px;
+    }
+    .headline .line2 {
+      display: block;
+      background: linear-gradient(90deg, var(--teal-bright), var(--teal) 55%, var(--amber));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .tagline {
+      font-size: 15px;
+      color: var(--muted);
+      line-height: 1.65;
+      max-width: 520px;
+      margin-bottom: 28px;
+    }
+
+    /* Animated stat counters */
+    .stat-row {
+      display: flex;
+      gap: 32px;
+    }
+    .stat-block strong {
+      display: block;
+      font-family: var(--mono);
+      font-size: 22px;
+      font-weight: 800;
+      color: #fff;
+    }
+    .stat-block strong span { color: var(--teal); }
+    .stat-block small {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    /* Scrolling package log ticker */
+    .ticker-wrap {
+      overflow: hidden;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      padding: 10px 0;
+      margin-top: 28px;
+    }
+    .ticker-track {
+      display: flex;
+      gap: 36px;
+      animation: tickerScroll 18s linear infinite;
+      width: max-content;
+    }
+    @keyframes tickerScroll {
+      from { transform: translateX(0); }
+      to   { transform: translateX(-50%); }
+    }
+    .ticker-item {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+    .ticker-item span.ver { color: var(--teal); }
+    .ticker-item span.dot {
+      width: 3px; height: 3px; border-radius: 50%;
+      background: var(--muted); flex-shrink: 0;
+    }
+
+    .story-foot {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      color: rgba(100, 116, 139, 0.6);
+    }
+
+    /* ─── RIGHT: AUTH SIDE ─── */
+    .auth-side {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 44px clamp(28px, 4vw, 60px);
+      position: relative;
+    }
+
+    /* Glowing card container */
+    .auth-card {
+      width: 100%;
+      max-width: 400px;
+      position: relative;
+    }
+
+    /* Multi-layer card glow effect */
+    .card-glow {
+      position: absolute;
+      inset: -2px;
+      border-radius: 22px;
+      background: conic-gradient(
+        from var(--a, 0deg),
+        transparent 20%,
+        var(--teal) 40%,
+        transparent 60%,
+        var(--amber) 80%,
+        transparent 100%
+      );
+      animation: rotateBorder 4s linear infinite;
+      opacity: 0.4;
+    }
+    @property --a {
+      syntax: '<angle>';
+      inherits: false;
+      initial-value: 0deg;
+    }
+    @keyframes rotateBorder {
+      to { --a: 360deg; }
+    }
+
+    .card-inner {
+      position: relative;
+      background: #0b0f18;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 20px;
+      padding: 40px 32px;
+      z-index: 1;
+      backdrop-filter: blur(20px);
+    }
+
+    /* Step indicator */
+    .step-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 24px;
+    }
+    .step-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: rgba(255, 255, 255, 0.12);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .step-dot.active {
+      background: var(--teal);
+      box-shadow: 0 0 10px var(--teal-glow);
+      width: 20px; border-radius: 3px;
+    }
+    .step-label {
+      margin-left: 8px;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+    }
+
+    .card-h {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+    .card-sub {
+      font-size: 12.5px;
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+
+    .form-fields {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .f-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .f-group label {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      font-weight: 700;
+      color: #8492a6;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .f-wrap {
+      position: relative;
+    }
+    .f-input {
+      width: 100%;
+      height: 46px;
+      background: #060810;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 0 14px;
+      color: #fff;
+      font-size: 13px;
+      font-family: var(--sans);
+      outline: none;
+      transition: all 0.2s;
+    }
+    .f-input:focus {
+      border-color: var(--teal);
+      background: #0d1017;
+      box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.15), 0 0 20px rgba(45, 212, 191, 0.08);
+    }
+
+    .btn-primary {
+      width: 100%;
+      height: 48px;
+      margin-top: 8px;
+      background: linear-gradient(110deg, #0d9488, var(--teal), var(--teal-bright));
+      border: none;
+      border-radius: 10px;
+      color: #031411;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.2s;
+    }
+    .btn-primary::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.2) 50%, transparent 70%);
+      transform: translateX(-100%);
+      transition: transform 0.5s ease;
+    }
+    .btn-primary:hover::after { transform: translateX(100%); }
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 28px rgba(45, 212, 191, 0.3);
+    }
+
+    .card-foot-link {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 14px;
+      font-size: 11px;
+    }
+    .card-foot-link a {
+      color: var(--teal);
+      text-decoration: none;
+    }
+    .card-foot-link a:last-child { color: var(--muted); }
+
+    .secure-tag {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 18px;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: rgba(100, 116, 139, 0.6);
+    }
+
+    .step-view { display: none; }
+    .step-view.active { display: block; }
+  </style>
+</head>
+<body>
+
+<canvas id="stars"></canvas>
+
+<div class="slash-overlay">
+  <div class="slash-bar"></div>
+</div>
+
+<!-- Floating package nodes -->
+<div class="pkg-node n1">aptify-cli v1.1.0</div>
+<div class="pkg-node n2">vault-agent 2.1.0-rc2</div>
+<div class="pkg-node n3">kernel-headers 6.10</div>
+<div class="pkg-node n4">openssl 3.3.1</div>
+<div class="pkg-node n5">node-runtime 22.6</div>
+<div class="pkg-node n6">postgresql-16</div>
+
+<div class="page">
+  <!-- LEFT STORY SIDE -->
+  <section class="story">
+    <nav class="story-nav">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" stroke="#5eead4" stroke-width="2"/>
+            <path d="m3.3 7 8.7 5 8.7-5M12 22V12" stroke="#5eead4" stroke-width="2"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <strong>Aptify</strong>
+          <em>Registry Engine</em>
+        </div>
+      </div>
+      <div class="uptime-badge">
+        <span class="heartbeat">
+          <svg width="22" height="14" viewBox="0 0 22 14">
+            <polyline points="0,7 4,7 6,2 8,12 10,5 12,9 14,7 22,7"
+              fill="none" stroke="#2dd4bf" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        99.98% UPTIME
+      </div>
+    </nav>
+
+    <div class="story-hero">
+      <div class="pretext">Package Release Control</div>
+      <h1 class="headline">
+        Your packages.<br>
+        <span class="line2">Signed. Indexed.<br>Served.</span>
+      </h1>
+      <p class="tagline">
+        A self-hosted Debian & RPM registry engineered to move packages from your CI/CD pipeline to production servers in under a second — cryptographically sealed every step.
+      </p>
+
+      <div class="stat-row">
+        <div class="stat-block">
+          <strong><span id="count-ms">18</span>ms</strong>
+          <small>Index Rebuild</small>
+        </div>
+        <div class="stat-block">
+          <strong><span id="count-pkg">0</span><span>+</span></strong>
+          <small>Packages Served</small>
+        </div>
+        <div class="stat-block">
+          <strong>ED<span>25519</span></strong>
+          <small>Release Signing</small>
+        </div>
+      </div>
+
+      <!-- Scrolling Release Ticker -->
+      <div class="ticker-wrap">
+        <div class="ticker-track" id="ticker">
+          <span class="ticker-item"><span class="dot"></span>nginx <span class="ver">1.27.0</span> · stable</span>
+          <span class="ticker-item"><span class="dot"></span>aptify-cli <span class="ver">1.1.0</span> · amd64/arm64</span>
+          <span class="ticker-item"><span class="dot"></span>vault-mesh-agent <span class="ver">2.1.0-rc2</span> · testing</span>
+          <span class="ticker-item"><span class="dot"></span>node-runtime <span class="ver">22.6.0</span> · lts</span>
+          <span class="ticker-item"><span class="dot"></span>kernel-headers <span class="ver">6.10.4-1</span> · stable</span>
+          <span class="ticker-item"><span class="dot"></span>postgresql <span class="ver">16.4</span> · stable</span>
+          <!-- duplicate for seamless loop -->
+          <span class="ticker-item"><span class="dot"></span>nginx <span class="ver">1.27.0</span> · stable</span>
+          <span class="ticker-item"><span class="dot"></span>aptify-cli <span class="ver">1.1.0</span> · amd64/arm64</span>
+          <span class="ticker-item"><span class="dot"></span>vault-mesh-agent <span class="ver">2.1.0-rc2</span> · testing</span>
+          <span class="ticker-item"><span class="dot"></span>node-runtime <span class="ver">22.6.0</span> · lts</span>
+          <span class="ticker-item"><span class="dot"></span>kernel-headers <span class="ver">6.10.4-1</span> · stable</span>
+          <span class="ticker-item"><span class="dot"></span>postgresql <span class="ver">16.4</span> · stable</span>
+        </div>
+      </div>
+    </div>
+
+    <footer class="story-foot">
+      DEB (APT) · RPM (YUM/DNF) · amd64 · arm64 · TOTP 2FA · Aptify v1.1.0
+    </footer>
+  </section>
+
+  <!-- RIGHT AUTH SIDE -->
+  <section class="auth-side">
+    <div class="auth-card">
+      <!-- Rotating border glow -->
+      <div class="card-glow"></div>
+
+      <div class="card-inner">
+        <!-- Step indicator pills -->
+        <div class="step-indicator">
+          <div class="step-dot active" onclick="setStep(0)"></div>
+          <div class="step-dot" onclick="setStep(1)"></div>
+          <span class="step-label" id="step-lbl">STEP 01 / 02</span>
+        </div>
+
+        <!-- Step 1: Password -->
+        <div class="step-view active" id="step-0">
+          <h2 class="card-h">Sign in</h2>
+          <p class="card-sub">Access your private package registry.</p>
+
+          <form class="form-fields" onsubmit="event.preventDefault(); setStep(1);">
+            <div class="f-group">
+              <label>Username</label>
+              <div class="f-wrap">
+                <input class="f-input" type="text" value="admin" required />
+              </div>
+            </div>
+            <div class="f-group">
+              <label>Password</label>
+              <div class="f-wrap">
+                <input class="f-input" type="password" value="vaultPen_Admin1232" required />
+              </div>
+            </div>
+            <button type="submit" class="btn-primary">Continue to 2FA →</button>
+          </form>
+        </div>
+
+        <!-- Step 2: 2FA -->
+        <div class="step-view" id="step-1">
+          <h2 class="card-h" style="color: var(--amber)">Security Code</h2>
+          <p class="card-sub">6-digit TOTP from your authenticator app.</p>
+
+          <form class="form-fields" onsubmit="event.preventDefault(); this.querySelector('button').textContent='✓ Authenticated'; this.querySelector('button').style.background='linear-gradient(110deg, #059669, #10b981)';">
+            <div class="f-group">
+              <label>Authenticator Code</label>
+              <div class="f-wrap">
+                <input class="f-input" type="text" placeholder="123456" maxlength="8"
+                  style="font-family: var(--mono); font-size: 18px; letter-spacing: 4px; text-align: center;" required />
+              </div>
+            </div>
+            <button type="submit" class="btn-primary">Verify & Enter Registry →</button>
+          </form>
+
+          <div class="card-foot-link">
+            <a href="#">Use recovery code</a>
+            <a href="#" onclick="setStep(0); return false;">← Back to login</a>
+          </div>
+        </div>
+
+        <div class="secure-tag">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>
+            <path d="m9 12 2 2 4-4"/>
+          </svg>
+          CSRF Isolated · HMAC-SHA256 Session Tokens
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+  /* ─── Starfield Canvas ─── */
+  (function () {
+    const canvas = document.getElementById('stars');
+    const ctx = canvas.getContext('2d');
+    let W, H, stars = [];
+
+    function resize() {
+      W = canvas.width  = window.innerWidth;
+      H = canvas.height = window.innerHeight;
+    }
+
+    function mkStar() {
+      return {
+        x: Math.random() * W,
+        y: Math.random() * H,
+        r: Math.random() * 1.2 + 0.2,
+        a: Math.random(),
+        spd: Math.random() * 0.4 + 0.05,
+        dir: Math.random() > 0.5 ? 1 : -1,
+      };
+    }
+
+    function init() {
+      resize();
+      stars = Array.from({ length: 260 }, mkStar);
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+      for (const s of stars) {
+        s.a += s.spd * 0.01 * s.dir;
+        if (s.a > 1 || s.a < 0) s.dir *= -1;
+        ctx.globalAlpha = s.a * 0.7;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      /* Draw constellation lines between nearby stars */
+      ctx.strokeStyle = 'rgba(45,212,191,0.06)';
+      ctx.lineWidth = 0.5;
+      for (let i = 0; i < stars.length; i++) {
+        for (let j = i + 1; j < stars.length; j++) {
+          const dx = stars[i].x - stars[j].x;
+          const dy = stars[i].y - stars[j].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 80) {
+            ctx.globalAlpha = (1 - dist / 80) * 0.4;
+            ctx.beginPath();
+            ctx.moveTo(stars[i].x, stars[i].y);
+            ctx.lineTo(stars[j].x, stars[j].y);
+            ctx.stroke();
+          }
+        }
+      }
+      ctx.globalAlpha = 1;
+      requestAnimationFrame(draw);
+    }
+
+    window.addEventListener('resize', init);
+    init();
+    draw();
+  })();
+
+  /* ─── Animated Package Count ─── */
+  (function () {
+    const el = document.getElementById('count-pkg');
+    let count = 0;
+    const target = 4782;
+    const step = Math.ceil(target / 80);
+    const t = setInterval(() => {
+      count = Math.min(count + step, target);
+      el.textContent = count.toLocaleString();
+      if (count >= target) clearInterval(t);
+    }, 18);
+  })();
+
+  /* ─── Step Switcher ─── */
+  const steps = document.querySelectorAll('.step-view');
+  const dots  = document.querySelectorAll('.step-dot');
+  const lbl   = document.getElementById('step-lbl');
+
+  function setStep(idx) {
+    steps.forEach((s, i) => s.classList.toggle('active', i === idx));
+    dots.forEach((d, i)  => d.classList.toggle('active', i === idx));
+    lbl.textContent = `STEP 0${idx + 1} / 02`;
+  }
+</script>
+</body>
+</html>
+
