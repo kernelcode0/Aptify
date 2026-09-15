@@ -89,10 +89,37 @@ export default function Login() {
 
       <div className="package-flow" aria-hidden="true">
         <div className="flow-glow" />
-        <div className="flow-track"><span/><span/><span/><span/></div>
-        <div className="flow-step flow-source"><i><Icon name="package" size={18}/></i><strong>Package</strong><small>nano_9.0.deb</small></div>
-        <div className="flow-step flow-sign"><i><Icon name="shield" size={18}/></i><strong>Sign</strong><small>GPG verified</small></div>
-        <div className="flow-step flow-publish"><i><Icon name="check" size={18}/></i><strong>Publish</strong><small>Ready to install</small></div>
+        <div className="flow-step flow-source">
+          <i><Icon name="package" size={18}/></i>
+          <div className="flow-step-text">
+            <strong>Package</strong>
+            <small>nano_9.0.deb</small>
+          </div>
+        </div>
+        <div className="flow-connector connector-1">
+          <div className="connector-track">
+            <div className="connector-beam" />
+          </div>
+        </div>
+        <div className="flow-step flow-sign">
+          <i><Icon name="shield" size={18}/></i>
+          <div className="flow-step-text">
+            <strong>Sign</strong>
+            <small>GPG verified</small>
+          </div>
+        </div>
+        <div className="flow-connector connector-2">
+          <div className="connector-track">
+            <div className="connector-beam" />
+          </div>
+        </div>
+        <div className="flow-step flow-publish">
+          <i><Icon name="check" size={18}/></i>
+          <div className="flow-step-text">
+            <strong>Publish</strong>
+            <small>Ready to install</small>
+          </div>
+        </div>
       </div>
 
       <div className="story-proof">
