@@ -155,8 +155,8 @@ export default function Login() {
         {step === 'credentials' ? (
           <>
             <div className="login-heading">
-              <div className="login-heading-icon"><Icon name="lock" size={19}/></div>
-              <span>Welcome back</span>
+              <div className="login-heading-icon"><Icon name="lock" size={22}/></div>
+              <div className="login-kicker"><span className="login-kicker-dot"/>Secure Workspace</div>
               <h2>Sign in to Aptify</h2>
               <p>Enter your workspace credentials to continue.</p>
             </div>
@@ -180,8 +180,8 @@ export default function Login() {
         ) : (
           <>
             <div className="login-heading">
-              <div className="login-heading-icon"><Icon name="shield" size={19}/></div>
-              <span>Two-factor challenge</span>
+              <div className="login-heading-icon"><Icon name="shield" size={22}/></div>
+              <div className="login-kicker"><span className="login-kicker-dot"/>Two-Factor Challenge</div>
               <h2>Two-factor authentication</h2>
               <p>{useRecovery ? 'Enter an emergency single-use recovery code.' : 'Enter the 6-digit code from your authenticator app.'}</p>
             </div>
