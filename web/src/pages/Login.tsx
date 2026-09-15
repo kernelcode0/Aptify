@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { api } from '../api'
 import './Login.css'
 
-type IconName = 'user' | 'lock' | 'eye' | 'eyeOff' | 'arrow' | 'alert' | 'shield' | 'package' | 'check'
+type IconName = 'user' | 'lock' | 'eye' | 'eyeOff' | 'arrow' | 'alert' | 'shield' | 'package' | 'check' | 'capsLock'
 
 function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, React.ReactNode> = {
@@ -16,6 +16,7 @@ function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
     shield: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></>,
     package: <><path d="M3 8h18v13H3zM1 3h22v5H1zM10 13h4"/></>,
     check: <path d="m5 12 4 4L19 6"/>,
+    capsLock: <><path d="M12 3.5 5.5 10h3.5v6.5h6V10h3.5L12 3.5Z" fill="currentColor" fillOpacity="0.25"/><line x1="5.5" y1="19.5" x2="18.5" y2="19.5"/></>,
   }
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
 }
@@ -36,6 +37,8 @@ export default function Login() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [capsLock, setCapsLock] = useState(false)
+  const [serverHealthy, setServerHealthy] = useState<boolean | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [step, setStep] = useState<'credentials' | '2fa'>('credentials')
@@ -44,6 +47,16 @@ export default function Login() {
   const [useRecovery, setUseRecovery] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
+
+  useEffect(() => {
+    fetch('/health')
+      .then(res => setServerHealthy(res.ok))
+      .catch(() => setServerHealthy(false))
+  }, [])
+
+  const checkCapsLock = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    setCapsLock(e.getModifierState('CapsLock'))
+  }
 
   const handleCredentialsSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -65,12 +78,11 @@ export default function Login() {
     }
   }
 
-  const handle2FASubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const verify2FACode = async (codeToVerify: string) => {
     setLoading(true)
     setError('')
     try {
-      await api.verify2FA(preAuthToken, twoFactorCode)
+      await api.verify2FA(preAuthToken, codeToVerify)
       const from = (location.state as { from?: { pathname?: string } })?.from?.pathname || '/'
       navigate(from, { replace: true })
     } catch (err: unknown) {
@@ -80,13 +92,38 @@ export default function Login() {
     }
   }
 
+  const handle2FASubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    verify2FACode(twoFactorCode)
+  }
+
+  const handle2FACodeChange = (val: string) => {
+    if (useRecovery) {
+      setTwoFactorCode(val)
+      return
+    }
+    const cleaned = val.replace(/[^0-9]/g, '').slice(0, 6)
+    setTwoFactorCode(cleaned)
+  }
+
   return <main className="login-root">
     <div className="login-atmosphere" aria-hidden="true"><span/><span/><span/></div>
 
     <section className="login-story" aria-label="About Aptify">
       <div className="login-brand">
         <AptifyMark />
-        <div><strong>Aptify</strong><span>Package control plane</span></div>
+        <div>
+          <div className="login-brand-name">
+            <strong>Aptify</strong>
+            {serverHealthy !== null && (
+              <span className={`brand-status-badge ${serverHealthy ? 'status-online' : 'status-offline'}`} title={serverHealthy ? 'Daemon online' : 'Daemon unreachable'}>
+                <i />
+                <span>{serverHealthy ? 'Online' : 'Offline'}</span>
+              </span>
+            )}
+          </div>
+          <span>Package control plane</span>
+        </div>
       </div>
 
       <div className="login-story-copy">
@@ -170,7 +207,30 @@ export default function Login() {
               </label>
               <label className="login-field" htmlFor="password">
                 <span>Password</span>
-                <div className="login-input"><Icon name="lock"/><input id="password" type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="Enter your password" autoComplete="current-password" required /><button type="button" onClick={() => setShowPassword(show => !show)} aria-label={showPassword ? 'Hide password' : 'Show password'}><Icon name={showPassword ? 'eyeOff' : 'eye'}/></button></div>
+                <div className="login-input">
+                  <Icon name="lock"/>
+                  <input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    onKeyDown={checkCapsLock}
+                    onKeyUp={checkCapsLock}
+                    onBlur={() => setCapsLock(false)}
+                    placeholder="Enter your password"
+                    autoComplete="current-password"
+                    required
+                  />
+                  <button type="button" onClick={() => setShowPassword(show => !show)} aria-label={showPassword ? 'Hide password' : 'Show password'} tabIndex={-1}><Icon name={showPassword ? 'eyeOff' : 'eye'}/></button>
+                </div>
+                {capsLock && (
+                  <div className="caps-lock-badge" role="status" aria-live="polite">
+                    <span className="caps-lock-icon-wrap">
+                      <Icon name="capsLock" size={11}/>
+                    </span>
+                    <span>Caps Lock is on</span>
+                  </div>
+                )}
               </label>
               <button type="submit" className="login-submit" disabled={loading}>
                 {loading ? <><span className="spinner login-spinner"/>Verifying credentials…</> : <><span>Continue to workspace</span><i><Icon name="arrow" size={15}/></i></>}
@@ -191,35 +251,38 @@ export default function Login() {
             <form onSubmit={handle2FASubmit} className="login-form">
               <label className="login-field" htmlFor="twofactor">
                 <span>{useRecovery ? 'Recovery code' : '6-digit authentication code'}</span>
-                <div className="login-input">
-                  <Icon name="lock"/>
+                <div className="login-input login-input-2fa">
                   <input
                     id="twofactor"
                     type="text"
+                    inputMode={useRecovery ? 'text' : 'numeric'}
+                    pattern={useRecovery ? undefined : '[0-9]*'}
+                    className={useRecovery ? 'input-recovery' : 'input-totp'}
                     value={twoFactorCode}
-                    onChange={e => setTwoFactorCode(e.target.value)}
-                    placeholder={useRecovery ? 'xxxx-xxxx' : '123456'}
+                    onChange={e => handle2FACodeChange(e.target.value)}
+                    placeholder={useRecovery ? 'xxxx-xxxx' : '000000'}
                     autoFocus
                     required
-                    maxLength={useRecovery ? 16 : 8}
+                    maxLength={useRecovery ? 16 : 6}
                     autoComplete="one-time-code"
+                    spellCheck={false}
                   />
                 </div>
               </label>
               <button type="submit" className="login-submit" disabled={loading}>
                 {loading ? <><span className="spinner login-spinner"/>Verifying code…</> : <><span>Verify and sign in</span><i><Icon name="arrow" size={15}/></i></>}
               </button>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.75rem', fontSize: '0.85rem' }}>
+              <div className="twofactor-links">
                 <button
                   type="button"
-                  style={{ background: 'none', border: 'none', color: '#5eead4', cursor: 'pointer', padding: 0 }}
+                  className="btn-link-accent"
                   onClick={() => { setUseRecovery(prev => !prev); setError(''); setTwoFactorCode('') }}
                 >
-                  {useRecovery ? 'Use authenticator app code' : 'Use a recovery code'}
+                  {useRecovery ? 'Use authenticator app code' : 'Use emergency recovery code'}
                 </button>
                 <button
                   type="button"
-                  style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0 }}
+                  className="btn-link-muted"
                   onClick={() => { setStep('credentials'); setError(''); setTwoFactorCode('') }}
                 >
                   Back to login
