@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { api } from '../api'
 import './Login.css'
 
-type IconName = 'user' | 'lock' | 'eye' | 'eyeOff' | 'arrow' | 'alert' | 'shield' | 'package' | 'check' | 'capsLock'
+type IconName = 'user' | 'lock' | 'eye' | 'eyeOff' | 'arrow' | 'alert' | 'shield' | 'package' | 'check' | 'capsLock' | 'x'
 
 function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, React.ReactNode> = {
@@ -17,6 +17,7 @@ function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
     package: <><path d="M3 8h18v13H3zM1 3h22v5H1zM10 13h4"/></>,
     check: <path d="m5 12 4 4L19 6"/>,
     capsLock: <><path d="M12 3.5 5.5 10h3.5v6.5h6V10h3.5L12 3.5Z" fill="currentColor" fillOpacity="0.25"/><line x1="5.5" y1="19.5" x2="18.5" y2="19.5"/></>,
+    x: <><path d="M18 6 6 18M6 6l12 12"/></>,
   }
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
 }
@@ -45,6 +46,8 @@ export default function Login() {
   const [preAuthToken, setPreAuthToken] = useState('')
   const [twoFactorCode, setTwoFactorCode] = useState('')
   const [useRecovery, setUseRecovery] = useState(false)
+  const [rememberDevice, setRememberDevice] = useState(true)
+  const [activeStepTooltip, setActiveStepTooltip] = useState<'source' | 'sign' | 'publish' | null>(null)
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -53,6 +56,18 @@ export default function Login() {
       .then(res => setServerHealthy(res.ok))
       .catch(() => setServerHealthy(false))
   }, [])
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && step === '2fa') {
+        setStep('credentials')
+        setError('')
+        setTwoFactorCode('')
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [step])
 
   const checkCapsLock = (e: React.KeyboardEvent<HTMLInputElement>) => {
     setCapsLock(e.getModifierState('CapsLock'))
@@ -132,38 +147,77 @@ export default function Login() {
         <p>One secure home for publishing, signing, and distributing the software your teams depend on.</p>
       </div>
 
-      <div className="package-flow" aria-hidden="true">
+      <div className="package-flow">
         <div className="flow-glow" />
-        <div className="flow-step flow-source">
+        <div
+          className={`flow-step flow-source ${activeStepTooltip === 'source' ? 'is-hovered' : ''}`}
+          onMouseEnter={() => setActiveStepTooltip('source')}
+          onMouseLeave={() => setActiveStepTooltip(null)}
+          tabIndex={0}
+          role="button"
+          aria-label="Package source guarantee"
+        >
           <i><Icon name="package" size={18}/></i>
           <div className="flow-step-text">
             <strong>Package</strong>
             <small>nano_9.0.deb</small>
           </div>
+          {activeStepTooltip === 'source' && (
+            <div className="flow-tooltip" role="tooltip">
+              <span className="tooltip-title">Ingestion Guarantee</span>
+              <span className="tooltip-desc">Format validation & SHA256 checksumming</span>
+            </div>
+          )}
         </div>
         <div className="flow-connector connector-1">
           <div className="connector-track">
             <div className="connector-beam" />
           </div>
         </div>
-        <div className="flow-step flow-sign">
+        <div
+          className={`flow-step flow-sign ${activeStepTooltip === 'sign' ? 'is-hovered' : ''}`}
+          onMouseEnter={() => setActiveStepTooltip('sign')}
+          onMouseLeave={() => setActiveStepTooltip(null)}
+          tabIndex={0}
+          role="button"
+          aria-label="Cryptographic signature guarantee"
+        >
           <i><Icon name="shield" size={18}/></i>
           <div className="flow-step-text">
             <strong>Sign</strong>
             <small>GPG verified</small>
           </div>
+          {activeStepTooltip === 'sign' && (
+            <div className="flow-tooltip" role="tooltip">
+              <span className="tooltip-title">Chain of Trust</span>
+              <span className="tooltip-desc">InRelease & Release.gpg signing</span>
+            </div>
+          )}
         </div>
         <div className="flow-connector connector-2">
           <div className="connector-track">
             <div className="connector-beam" />
           </div>
         </div>
-        <div className="flow-step flow-publish">
+        <div
+          className={`flow-step flow-publish ${activeStepTooltip === 'publish' ? 'is-hovered' : ''}`}
+          onMouseEnter={() => setActiveStepTooltip('publish')}
+          onMouseLeave={() => setActiveStepTooltip(null)}
+          tabIndex={0}
+          role="button"
+          aria-label="Distribution guarantee"
+        >
           <i><Icon name="check" size={18}/></i>
           <div className="flow-step-text">
             <strong>Publish</strong>
             <small>Ready to install</small>
           </div>
+          {activeStepTooltip === 'publish' && (
+            <div className="flow-tooltip" role="tooltip">
+              <span className="tooltip-title">Atomic Distribution</span>
+              <span className="tooltip-desc">Zero-downtime pool index updates</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -267,10 +321,59 @@ export default function Login() {
                     autoComplete="one-time-code"
                     spellCheck={false}
                   />
+                  {twoFactorCode.length > 0 && (
+                    <button
+                      type="button"
+                      className="btn-clear-totp"
+                      onClick={() => { setTwoFactorCode(''); setError('') }}
+                      aria-label="Clear code"
+                      tabIndex={-1}
+                    >
+                      <Icon name="x" size={13} />
+                    </button>
+                  )}
                 </div>
+                {!useRecovery && (
+                  <div className="totp-indicator-row" aria-hidden="true">
+                    <div className="totp-slots">
+                      {[0, 1, 2, 3, 4, 5].map(idx => (
+                        <span
+                          key={idx}
+                          className={`totp-slot ${twoFactorCode.length > idx ? 'filled' : ''} ${twoFactorCode.length === idx ? 'active' : ''}`}
+                        />
+                      ))}
+                    </div>
+                    {twoFactorCode.length === 6 && (
+                      <span className="totp-ready-hint">Ready — Press Enter ↵</span>
+                    )}
+                  </div>
+                )}
               </label>
-              <button type="submit" className="login-submit" disabled={loading}>
-                {loading ? <><span className="spinner login-spinner"/>Verifying code…</> : <><span>Verify and sign in</span><i><Icon name="arrow" size={15}/></i></>}
+
+              <label className="login-checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={rememberDevice}
+                  onChange={e => setRememberDevice(e.target.checked)}
+                />
+                <span className="custom-checkbox">
+                  {rememberDevice && <Icon name="check" size={11} />}
+                </span>
+                <span>Don't ask again on this device for 30 days</span>
+              </label>
+
+              <button
+                type="submit"
+                className={`login-submit ${twoFactorCode.length === 6 && !loading ? 'btn-ready' : ''}`}
+                disabled={loading}
+              >
+                {loading ? (
+                  <><span className="spinner login-spinner"/>Verifying code…</>
+                ) : twoFactorCode.length === 6 && !useRecovery ? (
+                  <><span>Verify and sign in</span><span className="key-return-hint">↵</span></>
+                ) : (
+                  <><span>Verify and sign in</span><i><Icon name="arrow" size={15}/></i></>
+                )}
               </button>
               <div className="twofactor-links">
                 <button
@@ -284,8 +387,9 @@ export default function Login() {
                   type="button"
                   className="btn-link-muted"
                   onClick={() => { setStep('credentials'); setError(''); setTwoFactorCode('') }}
+                  title="Press Escape to go back"
                 >
-                  Back to login
+                  Back to login <kbd className="btn-kbd-hint">Esc</kbd>
                 </button>
               </div>
             </form>
