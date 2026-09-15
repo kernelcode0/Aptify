@@ -24,6 +24,14 @@ function AptifyMark() {
   return <svg className="login-logo-mark" viewBox="0 0 64 64" role="img" aria-label="Aptify"><rect width="64" height="64" rx="14" fill="#0f1115"/><rect x="9" y="9" width="46" height="46" rx="10" fill="#191d25" stroke="#303744" strokeWidth="2"/><path d="M18 24h28v20H18z" fill="#202631" stroke="#5eead4" strokeWidth="3" strokeLinejoin="round"/><path d="M16 18h32v9H16z" fill="#14b8a6" stroke="#5eead4" strokeWidth="3" strokeLinejoin="round"/><path d="M27 34h10" stroke="#f59e0b" strokeWidth="4" strokeLinecap="round"/><path d="M23 18l4-6h10l4 6" fill="none" stroke="#f59e0b" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/></svg>
 }
 
+function GitHubIcon({ size = 13 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.87c-2.78.6-3.37-1.18-3.37-1.18-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.35 1.09 2.92.83.09-.65.35-1.09.64-1.34-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02A9.56 9.56 0 0 1 12 6.82c.85 0 1.71.12 2.51.34 1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.77c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/>
+    </svg>
+  )
+}
+
 export default function Login() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -130,7 +138,19 @@ export default function Login() {
     </section>
 
     <section className="login-access">
-      <div className="access-topline"><span><i/>Secure administrator access</span><small>APTIFY / AUTH</small></div>
+      <div className="access-topline">
+        <span><i/>Secure administrator access</span>
+        <a
+          href="https://github.com/kernelcode0"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="author-pill"
+          title="kernelcode0 on GitHub"
+        >
+          <GitHubIcon size={12} />
+          <span>@kernelcode0</span>
+        </a>
+      </div>
       <div className="login-card">
         {step === 'credentials' ? (
           <>
@@ -211,7 +231,21 @@ export default function Login() {
 
         <div className="login-security"><Icon name="shield" size={14}/><span>Your credentials are sent securely to your Aptify server.</span></div>
       </div>
-      <div className="login-foot"><span>Aptify control plane</span><i/> <span>Private by default</span></div>
+      <div className="login-foot">
+        <span>Aptify control plane</span>
+        <i/>
+        <a
+          href="https://github.com/kernelcode0"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="foot-author-link"
+        >
+          <GitHubIcon size={12} />
+          <span>Engineered by <strong>@kernelcode0</strong></span>
+        </a>
+        <i/>
+        <span>Private by default</span>
+      </div>
     </section>
   </main>
 }
