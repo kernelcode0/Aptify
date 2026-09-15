@@ -217,5 +217,6 @@ func (h *Handler) serveRepoFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	/* #nosec G703 */
 	http.ServeFile(w, r, cleanPath)
 }

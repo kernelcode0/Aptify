@@ -3,7 +3,7 @@ package api
 import (
 	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha1"
+	"crypto/sha1" // #nosec G505 -- RFC 6238 specifies HMAC-SHA1
 	"crypto/subtle"
 	"encoding/base32"
 	"encoding/base64"
@@ -35,7 +35,12 @@ func GenerateTOTP(secret string, t time.Time) (string, error) {
 		return "", fmt.Errorf("invalid base32 secret: %w", err)
 	}
 
-	counter := uint64(t.Unix() / 30)
+	unixTime := t.Unix()
+	if unixTime < 0 {
+		return "", fmt.Errorf("timestamp before unix epoch is not supported")
+	}
+	/* #nosec G115 */
+	counter := uint64(unixTime / 30)
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, counter)
 
