@@ -301,10 +301,7 @@ func (h *Handler) deletePackage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.regenerateRepoIndex(repo); err != nil {
-		jsonError(w, "index regenerate error", http.StatusInternalServerError)
-		return
-	}
+	h.enqueueIndex(repo.ID)
 	var deleteErr error
 	if repo.Type == "rpm" {
 		deleteErr = h.fs.DeleteRPMPackageFile(repo.Slug, pkg.Filename)

@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { api, setToken, type CurrentUser } from '../api'
+import { api, type CurrentUser } from '../api'
 import './Layout.css'
 
 function AptifyMark() {
@@ -65,7 +65,6 @@ export default function Layout() {
     } catch {
       // ignore
     }
-    setToken('')
     navigate('/login')
   }
 

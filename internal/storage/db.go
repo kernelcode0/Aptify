@@ -2,12 +2,13 @@ package storage
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/google/uuid"
 	_ "modernc.org/sqlite"
 )
 
@@ -108,31 +109,35 @@ func Open(dbType, dsn string) (*DB, error) {
 	return d, nil
 }
 
+func newUUID() string {
+	var b [16]byte
+	_, _ = rand.Read(b[:])
+	b[6] = (b[6] & 0x0f) | 0x40 // RFC 4122 version 4
+	b[8] = (b[8] & 0x3f) | 0x80 // RFC 4122 variant
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}
+
 func (d *DB) migrate() error {
-	var repoTable, pkgTable, userTable, apiKeyTable, auditLogTable string
-	if d.dbType == "mysql" {
-		userTable = `
-		CREATE TABLE IF NOT EXISTS users (
+	tables := []string{
+		`CREATE TABLE IF NOT EXISTS users (
 			id                  VARCHAR(36) PRIMARY KEY,
 			username            VARCHAR(255) UNIQUE NOT NULL,
 			role                VARCHAR(32) NOT NULL DEFAULT 'viewer',
 			password_hash       VARCHAR(255) NOT NULL,
 			totp_enabled        TINYINT(1) NOT NULL DEFAULT 0,
 			totp_secret         VARCHAR(64) NOT NULL DEFAULT '',
-			totp_recovery_codes TEXT,
+			totp_recovery_codes TEXT NOT NULL DEFAULT '[]',
 			created_at          DATETIME NOT NULL
-		);`
-		repoTable = `
-		CREATE TABLE IF NOT EXISTS repos (
+		);`,
+		`CREATE TABLE IF NOT EXISTS repos (
 			id          VARCHAR(36) PRIMARY KEY,
 			slug        VARCHAR(255) UNIQUE NOT NULL,
 			name        VARCHAR(255) NOT NULL,
 			codename    VARCHAR(255) NOT NULL DEFAULT 'stable',
 			type        VARCHAR(16) NOT NULL DEFAULT 'deb',
 			created_at  DATETIME NOT NULL
-		);`
-		pkgTable = `
-		CREATE TABLE IF NOT EXISTS packages (
+		);`,
+		`CREATE TABLE IF NOT EXISTS packages (
 			id           VARCHAR(36) PRIMARY KEY,
 			repo_id      VARCHAR(36) NOT NULL,
 			filename     VARCHAR(255) NOT NULL,
@@ -144,14 +149,12 @@ func (d *DB) migrate() error {
 			sha256       VARCHAR(64) NOT NULL,
 			sha1         VARCHAR(40) NOT NULL,
 			md5          VARCHAR(32) NOT NULL,
-			control_json TEXT NOT NULL,
+			control_json TEXT NOT NULL DEFAULT '{}',
 			uploaded_at  DATETIME NOT NULL,
-			FOREIGN KEY (repo_id) REFERENCES repos(id) ON DELETE CASCADE,
-			INDEX idx_packages_repo (repo_id)
-		);`
+			FOREIGN KEY (repo_id) REFERENCES repos(id) ON DELETE CASCADE
+		);`,
 		/* #nosec G101 */
-		apiKeyTable = `
-		CREATE TABLE IF NOT EXISTS api_keys (
+		`CREATE TABLE IF NOT EXISTS api_keys (
 			id          VARCHAR(36) PRIMARY KEY,
 			user_id     VARCHAR(36) NOT NULL,
 			name        VARCHAR(255) NOT NULL,
@@ -160,232 +163,81 @@ func (d *DB) migrate() error {
 			created_at  DATETIME NOT NULL,
 			last_used   DATETIME,
 			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-		);`
-		auditLogTable = `
-		CREATE TABLE IF NOT EXISTS audit_log (
+		);`,
+		`CREATE TABLE IF NOT EXISTS audit_log (
 			id          VARCHAR(36) PRIMARY KEY,
 			user_id     VARCHAR(36) NOT NULL,
 			username    VARCHAR(255) NOT NULL,
 			action      VARCHAR(64) NOT NULL,
 			resource    VARCHAR(255) NOT NULL,
 			detail      TEXT,
-			created_at  DATETIME NOT NULL,
-			INDEX idx_audit_created (created_at),
-			INDEX idx_audit_user (user_id)
-		);`
-	} else {
-		userTable = `
-		CREATE TABLE IF NOT EXISTS users (
-			id                  TEXT PRIMARY KEY,
-			username            TEXT UNIQUE NOT NULL,
-			role                TEXT NOT NULL DEFAULT 'viewer',
-			password_hash       TEXT NOT NULL,
-			totp_enabled        INTEGER NOT NULL DEFAULT 0,
-			totp_secret         TEXT NOT NULL DEFAULT '',
-			totp_recovery_codes TEXT NOT NULL DEFAULT '[]',
-			created_at          DATETIME NOT NULL
-		);`
-		repoTable = `
-		CREATE TABLE IF NOT EXISTS repos (
-			id          TEXT PRIMARY KEY,
-			slug        TEXT UNIQUE NOT NULL,
-			name        TEXT NOT NULL,
-			codename    TEXT NOT NULL DEFAULT 'stable',
-			type        TEXT NOT NULL DEFAULT 'deb',
 			created_at  DATETIME NOT NULL
-		);`
-		pkgTable = `
-		CREATE TABLE IF NOT EXISTS packages (
-			id           TEXT PRIMARY KEY,
-			repo_id      TEXT NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
-			filename     TEXT NOT NULL,
-			package      TEXT NOT NULL,
-			version      TEXT NOT NULL,
-			release      TEXT NOT NULL DEFAULT '',
-			arch         TEXT NOT NULL,
-			size         INTEGER NOT NULL,
-			sha256       TEXT NOT NULL,
-			sha1         TEXT NOT NULL,
-			md5          TEXT NOT NULL,
-			control_json TEXT NOT NULL DEFAULT '{}',
-			uploaded_at  DATETIME NOT NULL
-		);`
-		/* #nosec G101 */
-		apiKeyTable = `
-		CREATE TABLE IF NOT EXISTS api_keys (
-			id          TEXT PRIMARY KEY,
-			user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-			name        TEXT NOT NULL,
-			key_hash    TEXT NOT NULL UNIQUE,
-			prefix      TEXT NOT NULL,
-			created_at  DATETIME NOT NULL,
-			last_used   DATETIME
-		);`
-		auditLogTable = `
-		CREATE TABLE IF NOT EXISTS audit_log (
-			id          TEXT PRIMARY KEY,
-			user_id     TEXT NOT NULL,
-			username    TEXT NOT NULL,
-			action      TEXT NOT NULL,
-			resource    TEXT NOT NULL,
-			detail      TEXT,
-			created_at  DATETIME NOT NULL
-		);`
+		);`,
 	}
 
-	if _, err := d.db.Exec(userTable); err != nil {
+	for _, tbl := range tables {
+		if _, err := d.db.Exec(tbl); err != nil {
+			return err
+		}
+	}
+
+	// Ensure legacy columns exist for existing databases
+	if added, err := d.ensureColumn("users", "role", "VARCHAR(32) NOT NULL DEFAULT 'viewer'"); err != nil {
+		return err
+	} else if added {
+		_, _ = d.db.Exec(`UPDATE users SET role='admin'`)
+	}
+	if _, err := d.ensureColumn("users", "totp_enabled", "TINYINT(1) NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}
-	if _, err := d.db.Exec(repoTable); err != nil {
+	if _, err := d.ensureColumn("users", "totp_secret", "VARCHAR(64) NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
-	if _, err := d.db.Exec(pkgTable); err != nil {
+	if _, err := d.ensureColumn("users", "totp_recovery_codes", "TEXT NOT NULL DEFAULT '[]'"); err != nil {
 		return err
 	}
-	if _, err := d.db.Exec(apiKeyTable); err != nil {
+	if _, err := d.ensureColumn("repos", "type", "VARCHAR(16) NOT NULL DEFAULT 'deb'"); err != nil {
 		return err
 	}
-	if _, err := d.db.Exec(auditLogTable); err != nil {
+	if _, err := d.ensureColumn("packages", "`release`", "VARCHAR(255) NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
-	if err := d.ensureUserRoleColumn(); err != nil {
-		return err
-	}
-	if err := d.ensureUser2FAColumns(); err != nil {
-		return err
-	}
-	if err := d.ensureRepoTypeColumn(); err != nil {
-		return err
-	}
-	if err := d.ensurePackageReleaseColumn(); err != nil {
-		return err
-	}
+
 	if d.dbType == "sqlite" {
-		if _, err := d.db.Exec(`CREATE INDEX IF NOT EXISTS idx_packages_repo ON packages(repo_id);`); err != nil {
-			return err
+		for _, idx := range []string{
+			`CREATE INDEX IF NOT EXISTS idx_packages_repo ON packages(repo_id);`,
+			`CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at);`,
+			`CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log(user_id);`,
+		} {
+			if _, err := d.db.Exec(idx); err != nil {
+				return err
+			}
 		}
-		if _, err := d.db.Exec(`CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at);`); err != nil {
-			return err
-		}
-		if _, err := d.db.Exec(`CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log(user_id);`); err != nil {
-			return err
+	} else if d.dbType == "mysql" {
+		for _, idx := range []string{
+			`CREATE INDEX idx_packages_repo ON packages(repo_id)`,
+			`CREATE INDEX idx_audit_created ON audit_log(created_at)`,
+			`CREATE INDEX idx_audit_user ON audit_log(user_id)`,
+		} {
+			_, _ = d.db.Exec(idx)
 		}
 	}
 	return nil
 }
 
-func (d *DB) ensureRepoTypeColumn() error {
-	exists, err := d.columnExists("repos", "type")
-	if err != nil {
-		return err
-	}
-	if exists {
-		return nil
-	}
-	colType := "TEXT"
-	if d.dbType == "mysql" {
-		colType = "VARCHAR(16)"
-	}
-	_, err = d.db.Exec(`ALTER TABLE repos ADD COLUMN type ` + colType + ` NOT NULL DEFAULT 'deb'`)
-	return err
-}
-
-func (d *DB) ensurePackageReleaseColumn() error {
-	exists, err := d.columnExists("packages", "release")
-	if err != nil {
-		return err
-	}
-	if exists {
-		return nil
-	}
-	if d.dbType == "mysql" {
-		_, err = d.db.Exec("ALTER TABLE packages ADD COLUMN `release` VARCHAR(255) NOT NULL DEFAULT ''")
-	} else {
-		_, err = d.db.Exec("ALTER TABLE packages ADD COLUMN release TEXT NOT NULL DEFAULT ''")
-	}
-	return err
-}
-
-func (d *DB) ensureUserRoleColumn() error {
-	exists, err := d.columnExists("users", "role")
-	if err != nil {
-		return err
-	}
-	if exists {
-		return nil
-	}
-	roleType := "TEXT"
-	if d.dbType == "mysql" {
-		roleType = "VARCHAR(32)"
-	}
-	if _, err := d.db.Exec(`ALTER TABLE users ADD COLUMN role ` + roleType + ` NOT NULL DEFAULT 'viewer'`); err != nil {
-		return err
-	}
-	_, err = d.db.Exec(`UPDATE users SET role=?`, "admin")
-	return err
-}
-
-func (d *DB) ensureUser2FAColumns() error {
-	hasEnabled, err := d.columnExists("users", "totp_enabled")
-	if err != nil {
-		return err
-	}
-	if !hasEnabled {
-		colType := "INTEGER NOT NULL DEFAULT 0"
-		if d.dbType == "mysql" {
-			colType = "TINYINT(1) NOT NULL DEFAULT 0"
-		}
-		if _, err := d.db.Exec(`ALTER TABLE users ADD COLUMN totp_enabled ` + colType); err != nil {
-			return err
-		}
-	}
-
-	hasSecret, err := d.columnExists("users", "totp_secret")
-	if err != nil {
-		return err
-	}
-	if !hasSecret {
-		colType := "TEXT NOT NULL DEFAULT ''"
-		if d.dbType == "mysql" {
-			colType = "VARCHAR(64) NOT NULL DEFAULT ''"
-		}
-		if _, err := d.db.Exec(`ALTER TABLE users ADD COLUMN totp_secret ` + colType); err != nil {
-			return err
-		}
-	}
-
-	hasCodes, err := d.columnExists("users", "totp_recovery_codes")
-	if err != nil {
-		return err
-	}
-	if !hasCodes {
-		if d.dbType == "mysql" {
-			if _, err := d.db.Exec(`ALTER TABLE users ADD COLUMN totp_recovery_codes TEXT`); err != nil {
-				return err
-			}
-			_, _ = d.db.Exec(`UPDATE users SET totp_recovery_codes='[]' WHERE totp_recovery_codes IS NULL OR totp_recovery_codes=''`)
-		} else {
-			if _, err := d.db.Exec(`ALTER TABLE users ADD COLUMN totp_recovery_codes TEXT NOT NULL DEFAULT '[]'`); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (d *DB) columnExists(table, column string) (bool, error) {
-	// Whitelist table names to prevent SQL injection via string concatenation
+func (d *DB) ensureColumn(table, column, colDef string) (bool, error) {
 	validTables := map[string]bool{"users": true, "repos": true, "packages": true, "api_keys": true, "audit_log": true}
 	if !validTables[table] {
 		return false, fmt.Errorf("invalid table name")
 	}
 
+	rawCol := strings.Trim(column, "`")
 	var rows *sql.Rows
 	var err error
 	if d.dbType == "mysql" {
-		rows, err = d.db.Query("SHOW COLUMNS FROM "+table+" WHERE Field = ?", column) // #nosec G202
+		rows, err = d.db.Query("SHOW COLUMNS FROM "+table+" WHERE Field = ?", rawCol) // #nosec G202
 	} else {
-		rows, err = d.db.Query(`PRAGMA table_info(` + table + `)`) // #nosec G202
+		rows, err = d.db.Query("PRAGMA table_info(" + table + ")") // #nosec G202
 	}
 	if err != nil {
 		return false, err
@@ -393,22 +245,28 @@ func (d *DB) columnExists(table, column string) (bool, error) {
 	defer rows.Close()
 
 	if d.dbType == "mysql" {
-		return rows.Next(), rows.Err()
-	}
-	for rows.Next() {
-		var cid int
-		var name, colType string
-		var notNull int
-		var defaultValue any
-		var pk int
-		if err := rows.Scan(&cid, &name, &colType, &notNull, &defaultValue, &pk); err != nil {
-			return false, err
+		if rows.Next() {
+			return false, rows.Err()
 		}
-		if name == column {
-			return true, nil
+	} else {
+		for rows.Next() {
+			var cid, notNull, pk int
+			var name, colType string
+			var defaultValue any
+			if err := rows.Scan(&cid, &name, &colType, &notNull, &defaultValue, &pk); err != nil {
+				return false, err
+			}
+			if name == rawCol {
+				return false, nil
+			}
 		}
 	}
-	return false, rows.Err()
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+
+	_, err = d.db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, colDef))
+	return err == nil, err
 }
 
 // GetUserByUsername retrieves a user by their username.
@@ -426,7 +284,7 @@ func (d *DB) GetUserByUsername(username string) (*User, error) {
 // CreateUser inserts a new user.
 func (d *DB) CreateUser(username, passwordHash, role string) (*User, error) {
 	u := &User{
-		ID:                uuid.NewString(),
+		ID:                newUUID(),
 		Username:          username,
 		Role:              role,
 		PasswordHash:      passwordHash,
@@ -517,7 +375,7 @@ func (d *DB) DeleteUser(id string) error {
 // CreateRepo inserts a new repo and returns it.
 func (d *DB) CreateRepo(slug, name, codename, repoType string) (*Repo, error) {
 	r := &Repo{
-		ID:        uuid.NewString(),
+		ID:        newUUID(),
 		Slug:      slug,
 		Name:      name,
 		Codename:  codename,
@@ -608,7 +466,7 @@ func (d *DB) GetRepoArchitectures(repoID string) ([]string, error) {
 
 // AddPackage inserts a package record.
 func (d *DB) AddPackage(p *Package) error {
-	p.ID = uuid.NewString()
+	p.ID = newUUID()
 	p.UploadedAt = time.Now().UTC()
 	_, err := d.db.Exec(
 		`INSERT INTO packages (id, repo_id, filename, package, version, `+"`release`"+`, arch, size, sha256, sha1, md5, control_json, uploaded_at)
@@ -708,7 +566,7 @@ func (d *DB) ClearAuditLogExcept(ctx context.Context, keepEventID string) error 
 }
 
 func (d *DB) LogAuditWithID(userID, username, action, resource, detail string) (string, error) {
-	id := uuid.NewString()
+	id := newUUID()
 	_, err := d.db.Exec(`
 		INSERT INTO audit_log (id, user_id, username, action, resource, detail, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -719,7 +577,7 @@ func (d *DB) LogAuditWithID(userID, username, action, resource, detail string) (
 // CreateAPIKey inserts a new API key record.
 func (d *DB) CreateAPIKey(userID, name, keyHash, prefix string) (*APIKey, error) {
 	k := &APIKey{
-		ID:        uuid.NewString(),
+		ID:        newUUID(),
 		UserID:    userID,
 		Name:      name,
 		Prefix:    prefix,
@@ -793,7 +651,7 @@ func (d *DB) UpdateAPIKeyLastUsed(id string) error {
 func (d *DB) AddAuditEntry(userID, username, action, resource, detail string) error {
 	_, err := d.db.Exec(
 		`INSERT INTO audit_log (id, user_id, username, action, resource, detail, created_at) VALUES (?,?,?,?,?,?,?)`,
-		uuid.NewString(), userID, username, action, resource, detail, time.Now().UTC(),
+		newUUID(), userID, username, action, resource, detail, time.Now().UTC(),
 	)
 	return err
 }

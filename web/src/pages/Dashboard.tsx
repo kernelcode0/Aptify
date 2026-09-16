@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useOutletContext } from 'react-router-dom'
-import { api, getToken, type CurrentUser, type Repo } from '../api'
+import { api, type CurrentUser, type Repo } from '../api'
 import './Dashboard.css'
 
 type RepoFilter = 'all' | Repo['type']
@@ -73,7 +73,7 @@ export default function Dashboard() {
 
   const handleExportKey = async () => {
     try {
-      const res = await fetch('/api/system/gpg-key', { headers: { Authorization: `Bearer ${getToken() || ''}` } })
+      const res = await fetch('/api/system/gpg-key', { credentials: 'same-origin' })
       if (!res.ok) throw new Error('Failed to export GPG key')
       const url = window.URL.createObjectURL(await res.blob())
       const a = document.createElement('a')

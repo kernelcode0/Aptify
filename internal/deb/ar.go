@@ -20,7 +20,7 @@ func newArReader(r io.Reader) *arReader {
 }
 
 type arEntry struct {
-	r    io.Reader
+	r    *io.LimitedReader
 	size int64
 }
 
@@ -46,6 +46,13 @@ func (a *arReader) Next() (string, io.ReadCloser, error) {
 			return "", nil, fmt.Errorf("not an ar archive")
 		}
 		a.pos = 8
+	} else if a.pos%2 != 0 {
+		// Entries are 2-byte aligned; discard the odd-byte padding.
+		var pad [1]byte
+		if _, err := io.ReadFull(a.r, pad[:]); err != nil {
+			return "", nil, err
+		}
+		a.pos++
 	}
 
 	// Each entry header is 60 bytes.
@@ -75,33 +82,5 @@ func (a *arReader) Next() (string, io.ReadCloser, error) {
 	lr := &io.LimitedReader{R: a.r, N: size}
 	a.pos += size
 
-	// Entries are 2-byte aligned; skip padding byte if needed.
-	entry := &arEntry{
-		r:    newPaddedReader(lr, size),
-		size: size,
-	}
-	return name, entry, nil
-}
-
-// paddedReader wraps a LimitedReader and discards a padding byte when the
-// underlying size is odd (ar archives pad entries to 2-byte boundaries).
-type paddedReader struct {
-	lr    *io.LimitedReader
-	size  int64
-	doneN int64
-}
-
-func newPaddedReader(lr *io.LimitedReader, size int64) io.Reader {
-	return &paddedReader{lr: lr, size: size}
-}
-
-func (p *paddedReader) Read(buf []byte) (int, error) {
-	n, err := p.lr.Read(buf)
-	p.doneN += int64(n)
-	if err == io.EOF && p.size%2 != 0 {
-		// Discard the padding byte.
-		pad := make([]byte, 1)
-		_, _ = p.lr.R.Read(pad)
-	}
-	return n, err
+	return name, &arEntry{r: lr, size: size}, nil
 }

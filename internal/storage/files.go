@@ -57,7 +57,6 @@ func (fs *FileStore) IndexDir(slug, codename string) string {
 // InitRepo creates the required directory tree for a new repo.
 func (fs *FileStore) InitRepo(slug, codename string) error {
 	dirs := []string{
-		fs.PoolDir(slug, "placeholder"),
 		filepath.Join(fs.DistsDir(slug, codename), "main", "binary-amd64"),
 		filepath.Join(fs.DistsDir(slug, codename), "main", "binary-arm64"),
 		filepath.Join(fs.DistsDir(slug, codename), "main", "binary-all"),

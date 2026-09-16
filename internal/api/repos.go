@@ -166,10 +166,7 @@ func (h *Handler) updateRepo(w http.ResponseWriter, r *http.Request) {
 
 	if codenameChanged {
 		// Regenerate index in new path
-		if err := h.regenerateRepoIndex(repo); err != nil {
-			jsonError(w, "index regenerate error", http.StatusInternalServerError)
-			return
-		}
+		h.enqueueIndex(repo.ID)
 	}
 
 	jsonOK(w, repo, http.StatusOK)

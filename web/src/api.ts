@@ -1,17 +1,5 @@
-// getToken/setToken are preserved as no-ops for API key upload path compatibility.
-// No token is stored in JavaScript — localStorage was removed to prevent XSS theft.
-export function getToken(): string {
-  return ''
-}
-
-export function setToken(_t: string) {
-  // no-op
-}
-
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const token = getToken()
   const headers: Record<string, string> = {}
-  if (token) headers['Authorization'] = `Bearer ${token}`
   if (body) headers['Content-Type'] = 'application/json'
 
   const res = await fetch(path, {
@@ -165,12 +153,10 @@ export const api = {
   getSetup: (repoId: string) => req<SetupInfo>('GET', `/api/repos/${repoId}/setup`),
   getRepoStatus: (repoId: string) => req<RepoStatus>('GET', `/api/repos/${repoId}/status`),
   uploadPackage: async (repoId: string, file: File) => {
-    const token = getToken()
     const form = new FormData()
     form.append('file', file)
     const res = await fetch(`/api/repos/${repoId}/packages`, {
       method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
       credentials: 'same-origin', // Send HttpOnly session cookie
       body: form,
     })

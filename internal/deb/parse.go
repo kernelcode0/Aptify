@@ -76,14 +76,8 @@ func Parse(r io.Reader) (*Info, error) {
 
 // extractControl reads the ar archive and returns the raw content of the
 // control file found inside control.tar.{gz,bz2,xz}.
-func extractControl(r io.ReaderAt) (string, error) {
-	size, err := r.(interface{ Seek(int64, int) (int64, error) }).Seek(0, io.SeekEnd)
-	if err != nil {
-		// Fall back: read all into buffer to determine size.
-		return "", fmt.Errorf("seek: %w", err)
-	}
-
-	ar := newArReader(io.NewSectionReader(r, 0, size))
+func extractControl(r io.Reader) (string, error) {
+	ar := newArReader(r)
 	for {
 		name, rc, err := ar.Next()
 		if err == io.EOF {
