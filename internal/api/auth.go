@@ -415,6 +415,7 @@ func (h *Handler) authCheck(w http.ResponseWriter, r *http.Request) {
 		"role":               user.Role,
 		"user_id":            user.ID,
 		"two_factor_enabled": user.TOTPEnabled,
+		"device_trusted":     h.isDeviceTrusted(r, user.ID),
 	}, http.StatusOK)
 }
 
@@ -428,6 +429,11 @@ func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   -1,
 	})
+	jsonOK(w, map[string]string{"status": "ok"}, http.StatusOK)
+}
+
+func (h *Handler) forgetDevice(w http.ResponseWriter, r *http.Request) {
+	h.clear2FATrustCookie(w)
 	jsonOK(w, map[string]string{"status": "ok"}, http.StatusOK)
 }
 

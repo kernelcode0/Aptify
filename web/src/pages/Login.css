@@ -206,13 +206,14 @@
 }
 .login-input-2fa input.input-totp {
   width:100%;
-  height:52px;
-  padding:0 16px;
+  height:56px;
+  padding:2px 16px 12px;
   text-align:center;
   font-family:var(--mono);
   font-size:24px;
   font-weight:750;
   letter-spacing:.32em;
+  text-indent:.32em;
   color:#5eead4;
   background:#080c11;
   border:1.5px solid rgba(45,212,191,.35);
@@ -273,25 +274,31 @@
 .totp-indicator-row {
   display:flex;
   align-items:center;
-  justify-content:space-between;
+  justify-content:center;
   margin-top:8px;
   padding:0 4px;
 }
 .totp-slots {
+  position:absolute;
+  bottom:9px;
+  left:50%;
+  transform:translateX(-50%);
   display:flex;
   align-items:center;
-  gap:6px;
+  gap:10px;
+  pointer-events:none;
+  z-index:2;
 }
 .totp-slot {
-  width:9px;
-  height:4px;
+  width:12px;
+  height:3px;
   border-radius:999px;
-  background:rgba(56,68,86,.6);
+  background:rgba(56,68,86,.65);
   transition:all .2s cubic-bezier(.16,1,.3,1);
 }
 .totp-slot.active {
-  background:rgba(94,234,212,.4);
-  transform:scaleX(1.2);
+  background:rgba(94,234,212,.5);
+  box-shadow:0 0 6px rgba(94,234,212,.4);
 }
 .totp-slot.filled {
   background:#2dd4bf;
