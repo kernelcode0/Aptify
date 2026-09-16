@@ -59,6 +59,7 @@ func (h *Handler) Router(spa http.Handler) http.Handler {
 	// Auth endpoints
 	r.With(rl.RateLimit).Post("/api/auth/login", h.login)
 	r.With(rl.RateLimit).Post("/api/auth/2fa/verify", h.verify2FA)
+	r.Post("/api/auth/logout", h.logout)
 
 	// Admin API — protected by JWT or API key.
 	r.Group(func(r chi.Router) {

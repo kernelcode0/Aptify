@@ -361,3 +361,101 @@ func TestDirectCodeLogin(t *testing.T) {
 		t.Fatalf("expected status ok, got %v", resp)
 	}
 }
+
+func Test2FATrustDeviceFlow(t *testing.T) {
+	t.Setenv("LOGIN_RATE_LIMIT_ATTEMPTS", "50")
+	h := setupTestHandler(t)
+	router := h.Router(nil)
+
+	// 1. Enable 2FA directly on db
+	secret, _ := GenerateTOTPSecret()
+	_, hashed, _ := GenerateRecoveryCodes(5)
+	hJSON, _ := json.Marshal(hashed)
+	u, _ := h.db.GetUserByUsername("admin")
+	_ = h.db.UpdateUser2FA(u.ID, true, secret, string(hJSON))
+
+	// 2. Login requires 2FA initially
+	loginData := map[string]string{"username": "admin", "password": "securepassword"}
+	req := newPostRequest("/api/auth/login", loginData)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var req2FAResp struct {
+		Status       string `json:"status"`
+		PreAuthToken string `json:"pre_auth_token"`
+	}
+	_ = json.NewDecoder(w.Body).Decode(&req2FAResp)
+	if req2FAResp.Status != "2fa_required" {
+		t.Fatalf("expected 2fa_required, got %s", req2FAResp.Status)
+	}
+
+	// 3. Verify with trust_device: true
+	code, _ := GenerateTOTP(secret, time.Now())
+	verifyReq := newPostRequest("/api/auth/2fa/verify", map[string]any{
+		"pre_auth_token": req2FAResp.PreAuthToken,
+		"code":           code,
+		"trust_device":   true,
+	})
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, verifyReq)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 from verify, got %d", w.Code)
+	}
+
+	var trustCookie *http.Cookie
+	for _, c := range w.Result().Cookies() {
+		if c.Name == "apt_2fa_trust" {
+			trustCookie = c
+			break
+		}
+	}
+	if trustCookie == nil || trustCookie.Value == "" {
+		t.Fatalf("expected apt_2fa_trust cookie to be issued")
+	}
+
+	// 4. Subsequent login WITH trusted device cookie should skip 2FA!
+	reqWithTrust := newPostRequest("/api/auth/login", loginData)
+	reqWithTrust.AddCookie(trustCookie)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, reqWithTrust)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var loginResp map[string]string
+	_ = json.NewDecoder(w.Body).Decode(&loginResp)
+	if loginResp["status"] != "ok" {
+		t.Fatalf("expected status ok on trusted device, got %+v", loginResp)
+	}
+
+	// 5. Subsequent login WITHOUT trusted device cookie still requires 2FA
+	reqUntrusted := newPostRequest("/api/auth/login", loginData)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, reqUntrusted)
+	var untrustedResp struct {
+		Status string `json:"status"`
+	}
+	_ = json.NewDecoder(w.Body).Decode(&untrustedResp)
+	if untrustedResp.Status != "2fa_required" {
+		t.Fatalf("expected 2fa_required on untrusted device, got %s", untrustedResp.Status)
+	}
+
+	// 6. Test logout endpoint
+	logoutReq := newPostRequest("/api/auth/logout", nil)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, logoutReq)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 from logout, got %d", w.Code)
+	}
+	var sessionCleared bool
+	for _, c := range w.Result().Cookies() {
+		if c.Name == "apt_session" && c.MaxAge == -1 {
+			sessionCleared = true
+			break
+		}
+	}
+	if !sessionCleared {
+		t.Fatalf("expected apt_session cookie to be cleared on logout")
+	}
+}

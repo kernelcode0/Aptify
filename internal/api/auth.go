@@ -21,6 +21,7 @@ type loginReq struct {
 type verify2FAReq struct {
 	PreAuthToken string `json:"pre_auth_token"`
 	Code         string `json:"code"`
+	TrustDevice  bool   `json:"trust_device,omitempty"`
 }
 
 type enable2FAReq struct {
@@ -80,6 +81,14 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 			} else {
 				h.audit(user, "login_2fa_totp", "user:"+user.Username, "")
 			}
+			jsonOK(w, map[string]string{"status": "ok"}, http.StatusOK)
+			return
+		}
+
+		// Check if this browser/device is trusted for 30 days
+		if h.isDeviceTrusted(r, user.ID) {
+			h.issueSessionCookie(w, user)
+			h.audit(user, "login_trusted_device", "user:"+user.Username, "")
 			jsonOK(w, map[string]string{"status": "ok"}, http.StatusOK)
 			return
 		}
@@ -158,6 +167,9 @@ func (h *Handler) verify2FA(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.issueSessionCookie(w, user)
+	if req.TrustDevice {
+		h.issue2FATrustCookie(w, user.ID)
+	}
 	if usedRecovery {
 		h.audit(user, "login_2fa_recovery", "user:"+user.Username, "")
 	} else {
@@ -279,6 +291,7 @@ func (h *Handler) disable2FA(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "failed to disable 2FA", http.StatusInternalServerError)
 		return
 	}
+	h.clear2FATrustCookie(w)
 
 	h.audit(user, "disable_2fa", "user:"+user.Username, "")
 	jsonOK(w, map[string]string{"status": "ok"}, http.StatusOK)
@@ -403,4 +416,77 @@ func (h *Handler) authCheck(w http.ResponseWriter, r *http.Request) {
 		"user_id":            user.ID,
 		"two_factor_enabled": user.TOTPEnabled,
 	}, http.StatusOK)
+}
+
+func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "apt_session",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   -1,
+	})
+	jsonOK(w, map[string]string{"status": "ok"}, http.StatusOK)
+}
+
+func (h *Handler) issue2FATrustCookie(w http.ResponseWriter, userID string) {
+	claims := jwt.MapClaims{
+		"sub":     userID,
+		"purpose": "2fa_trust",
+		"exp":     time.Now().Add(30 * 24 * time.Hour).Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte(h.jwtSecret))
+	if err != nil {
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "apt_2fa_trust",
+		Value:    tokenString,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   30 * 24 * 3600, // 30 days
+	})
+}
+
+func (h *Handler) clear2FATrustCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "apt_2fa_trust",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   -1,
+	})
+}
+
+func (h *Handler) isDeviceTrusted(r *http.Request, userID string) bool {
+	cookie, err := r.Cookie("apt_2fa_trust")
+	if err != nil || cookie.Value == "" {
+		return false
+	}
+
+	token, err := jwt.Parse(cookie.Value, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method")
+		}
+		return []byte(h.jwtSecret), nil
+	})
+	if err != nil || !token.Valid {
+		return false
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok || claims["purpose"] != "2fa_trust" {
+		return false
+	}
+
+	sub, _ := claims["sub"].(string)
+	return sub == userID
 }

@@ -97,7 +97,7 @@ export default function Login() {
     setLoading(true)
     setError('')
     try {
-      await api.verify2FA(preAuthToken, codeToVerify)
+      await api.verify2FA(preAuthToken, codeToVerify, rememberDevice)
       const from = (location.state as { from?: { pathname?: string } })?.from?.pathname || '/'
       navigate(from, { replace: true })
     } catch (err: unknown) {

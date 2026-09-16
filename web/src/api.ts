@@ -141,8 +141,9 @@ export const api = {
   checkAuth: () => req<CurrentUser>('GET', '/api/auth/check'),
   login: (username: string, password: string, code?: string) =>
     req<LoginResponse>('POST', '/api/auth/login', { username, password, code }),
-  verify2FA: (preAuthToken: string, code: string) =>
-    req<{ status: string }>('POST', '/api/auth/2fa/verify', { pre_auth_token: preAuthToken, code }),
+  verify2FA: (preAuthToken: string, code: string, trustDevice: boolean = false) =>
+    req<{ status: string }>('POST', '/api/auth/2fa/verify', { pre_auth_token: preAuthToken, code, trust_device: trustDevice }),
+  logout: () => req<{ status: string }>('POST', '/api/auth/logout'),
   setup2FA: () => req<Setup2FAResponse>('POST', '/api/auth/2fa/setup'),
   enable2FA: (code: string) => req<{ status: string }>('POST', '/api/auth/2fa/enable', { code }),
   disable2FA: (password: string, code: string) =>
