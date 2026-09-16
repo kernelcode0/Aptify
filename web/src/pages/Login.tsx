@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import './Login.css'
 
@@ -42,7 +42,10 @@ export default function Login() {
   const [serverHealthy, setServerHealthy] = useState<boolean | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [step, setStep] = useState<'credentials' | '2fa'>('credentials')
+  const [searchParams] = useSearchParams()
+  const [step, setStep] = useState<'credentials' | '2fa'>(
+    searchParams.get('step') === '2fa' ? '2fa' : 'credentials'
+  )
   const [preAuthToken, setPreAuthToken] = useState('')
   const [twoFactorCode, setTwoFactorCode] = useState('')
   const [useRecovery, setUseRecovery] = useState(false)
@@ -332,10 +335,8 @@ export default function Login() {
                       <Icon name="x" size={13} />
                     </button>
                   )}
-                </div>
-                {!useRecovery && (
-                  <div className="totp-indicator-row" aria-hidden="true">
-                    <div className="totp-slots">
+                  {!useRecovery && (
+                    <div className="totp-slots" aria-hidden="true">
                       {[0, 1, 2, 3, 4, 5].map(idx => (
                         <span
                           key={idx}
@@ -343,9 +344,11 @@ export default function Login() {
                         />
                       ))}
                     </div>
-                    {twoFactorCode.length === 6 && (
-                      <span className="totp-ready-hint">Ready — Press Enter ↵</span>
-                    )}
+                  )}
+                </div>
+                {!useRecovery && twoFactorCode.length === 6 && (
+                  <div className="totp-indicator-row" aria-hidden="true">
+                    <span className="totp-ready-hint">Ready — Press Enter ↵</span>
                   </div>
                 )}
               </label>

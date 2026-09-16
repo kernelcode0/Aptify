@@ -458,4 +458,22 @@ func Test2FATrustDeviceFlow(t *testing.T) {
 	if !sessionCleared {
 		t.Fatalf("expected apt_session cookie to be cleared on logout")
 	}
+
+	// 7. Test forget-device endpoint clears apt_2fa_trust cookie
+	forgetReq := newPostRequest("/api/auth/2fa/forget-device", nil)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, forgetReq)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 from forget-device, got %d", w.Code)
+	}
+	var trustCleared bool
+	for _, c := range w.Result().Cookies() {
+		if c.Name == "apt_2fa_trust" && c.MaxAge == -1 {
+			trustCleared = true
+			break
+		}
+	}
+	if !trustCleared {
+		t.Fatalf("expected apt_2fa_trust cookie to be cleared on forget-device")
+	}
 }
