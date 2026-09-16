@@ -52,6 +52,9 @@ export default function Profile() {
   const { user } = useOutletContext<{ user: CurrentUser | null }>()
   const [copied, setCopied] = useState(false)
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(user?.two_factor_enabled ?? false)
+  const [deviceTrusted, setDeviceTrusted] = useState(user?.device_trusted ?? false)
+  const [forgetLoading, setForgetLoading] = useState(false)
+  const [deviceMsg, setDeviceMsg] = useState('')
 
   // 2FA Modals state
   const [modalType, setModalType] = useState<'setup' | 'disable' | 'regen' | null>(null)
@@ -63,6 +66,21 @@ export default function Profile() {
   const [loading, setLoading] = useState(false)
   const [modalError, setModalError] = useState('')
   const [codesCopied, setCodesCopied] = useState(false)
+
+  const handleForgetDevice = async () => {
+    setForgetLoading(true)
+    setDeviceMsg('')
+    try {
+      await api.forgetDevice()
+      setDeviceTrusted(false)
+      if (user) user.device_trusted = false
+      setDeviceMsg('This browser has been forgotten. Two-factor authentication will be required next time you log in.')
+    } catch (err: unknown) {
+      setDeviceMsg(err instanceof Error ? err.message : 'Failed to forget browser')
+    } finally {
+      setForgetLoading(false)
+    }
+  }
 
   if (!user) return null
 
@@ -214,6 +232,16 @@ export default function Profile() {
                   </button>
                   <button
                     type="button"
+                    className="ghost"
+                    onClick={handleForgetDevice}
+                    disabled={forgetLoading}
+                    style={{ padding: '8px 14px' }}
+                    title="Revoke the 30-day trust cookie on this browser so a 2FA code is required on next login"
+                  >
+                    {forgetLoading ? 'Forgetting…' : 'Forget this browser'}
+                  </button>
+                  <button
+                    type="button"
                     className="danger"
                     onClick={() => { setModalType('disable'); setPasswordInput(''); setDisableCode(''); setModalError('') }}
                     style={{ padding: '8px 14px' }}
@@ -223,6 +251,22 @@ export default function Profile() {
                 </>
               )}
             </div>
+
+            {twoFactorEnabled && (
+              <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', fontSize: '12px', color: '#94a3b8' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: deviceTrusted ? '#2dd4bf' : '#64748b', display: 'inline-block' }} />
+                  {deviceTrusted ? 'This browser is remembered (2FA code skipped for 30 days).' : 'This browser is not remembered (2FA code required every login).'}
+                </span>
+              </div>
+            )}
+
+            {deviceMsg && (
+              <div style={{ marginTop: '12px', padding: '8px 12px', background: 'rgba(45,212,191,.1)', border: '1px solid rgba(45,212,191,.25)', borderRadius: '8px', color: '#5eead4', fontSize: '12.5px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Icon name="check" size={14} />
+                <span>{deviceMsg}</span>
+              </div>
+            )}
           </section>
 
           <section className="access-card" aria-labelledby="access-title">

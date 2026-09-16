@@ -100,6 +100,7 @@ export interface CurrentUser {
   username: string
   role: Role
   two_factor_enabled?: boolean
+  device_trusted?: boolean
 }
 
 export interface User {
@@ -144,6 +145,7 @@ export const api = {
   verify2FA: (preAuthToken: string, code: string, trustDevice: boolean = false) =>
     req<{ status: string }>('POST', '/api/auth/2fa/verify', { pre_auth_token: preAuthToken, code, trust_device: trustDevice }),
   logout: () => req<{ status: string }>('POST', '/api/auth/logout'),
+  forgetDevice: () => req<{ status: string }>('POST', '/api/auth/2fa/forget-device'),
   setup2FA: () => req<Setup2FAResponse>('POST', '/api/auth/2fa/setup'),
   enable2FA: (code: string) => req<{ status: string }>('POST', '/api/auth/2fa/enable', { code }),
   disable2FA: (password: string, code: string) =>
