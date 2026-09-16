@@ -49,6 +49,15 @@ function AlertIcon() {
   )
 }
 
+function KeyIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="7.5" cy="15.5" r="4.5" />
+      <path d="m10.7 12.3 8.8-8.8M15 8l2 2M17.5 5.5l2 2" />
+    </svg>
+  )
+}
+
 export default function Users() {
   const { user: current } = useOutletContext<{ user: CurrentUser | null }>()
   const [users, setUsers] = useState<User[]>([])
@@ -124,6 +133,17 @@ export default function Users() {
       setUsers(prev => prev.filter(x => x.id !== u.id))
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'failed to delete user')
+    }
+  }
+
+  const handleReset2FA = async (u: User) => {
+    if (!confirm(`Reset 2FA for "${u.username}"? They will be able to log in with their password alone.`)) return
+    setError('')
+    try {
+      await api.resetUser2FA(u.id)
+      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, two_factor_enabled: false } : x))
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'failed to reset 2FA')
     }
   }
 
@@ -206,6 +226,7 @@ export default function Users() {
               <tr>
                 <th>Username</th>
                 <th>Role</th>
+                <th>2FA</th>
                 <th>Created</th>
                 <th style={{ width: 210 }}>Actions</th>
               </tr>
@@ -227,6 +248,15 @@ export default function Users() {
                         <RoleBadge role={u.role} />
                       )}
                     </td>
+                    <td>
+                      {u.two_factor_enabled ? (
+                        <span style={{ color: '#5eead4', fontSize: '11px', fontWeight: 650, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} /> Active
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--muted)', fontSize: '11px' }}>Off</span>
+                      )}
+                    </td>
                     <td className="muted-text">{formatDate(u.created_at)}</td>
                     <td>
                       {editing === u.id ? (
@@ -238,6 +268,11 @@ export default function Users() {
                       ) : (
                         <div className="user-actions">
                           <button className="ghost icon-btn" onClick={() => openEdit(u)} title="Edit user"><EditIcon /></button>
+                          {u.two_factor_enabled && !isSelf && (
+                            <button className="ghost icon-btn" onClick={() => handleReset2FA(u)} title="Reset 2FA for this user" style={{ color: '#fbbf24' }}>
+                              <KeyIcon />
+                            </button>
+                          )}
                           {!isSelf && <button className="danger icon-btn" onClick={() => handleDelete(u)} title="Delete user"><TrashIcon /></button>}
                         </div>
                       )}
@@ -245,7 +280,7 @@ export default function Users() {
                   </tr>
                 )
               })}
-              {visibleUsers.length === 0 && <tr><td colSpan={4}><div className="users-no-results"><strong>No users found</strong><span>Try a different name or role.</span><button className="ghost" onClick={() => { setQuery(''); setRoleFilter('all') }}>Clear filters</button></div></td></tr>}
+              {visibleUsers.length === 0 && <tr><td colSpan={5}><div className="users-no-results"><strong>No users found</strong><span>Try a different name or role.</span><button className="ghost" onClick={() => { setQuery(''); setRoleFilter('all') }}>Clear filters</button></div></td></tr>}
             </tbody>
           </table>
         </div>

@@ -3,7 +3,7 @@ services:
     build:
       context: .
       args:
-        VERSION: ${VERSION:-v1.1.0}
+        VERSION: ${VERSION:-v1.1.1}
     ports:
       - "8080:8080"
     volumes:
@@ -26,7 +26,7 @@ services:
       # To use MySQL, set DB_TYPE=mysql and provide DB_DSN via environment.
       # See .env.example for the DSN format. Do NOT put credentials here.
       - DB_TYPE=${DB_TYPE:-sqlite}
-      - DB_DSN=${DB_DSN:-}
+      # - DB_DSN=${DB_DSN:-}
     restart: unless-stopped
     # depends_on:
     #   - db  # Uncomment when using the MySQL service below
@@ -49,4 +49,4 @@ services:
 
 volumes:
   apt-data:
-  mysql-data:
+  # mysql-data:

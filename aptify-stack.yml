@@ -6,7 +6,7 @@ services:
     build:
       context: .
       args:
-        VERSION: ${VERSION:-v1.1.0}
+        VERSION: ${VERSION:-v1.1.1}
     volumes:
       - apt-data:/data
     environment:

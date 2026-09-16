@@ -18,7 +18,7 @@ import (
 )
 
 // version is overridden by release builds via -ldflags "-X main.version=vX.Y.Z".
-var version = "v1.1.0"
+var version = "v1.1.1"
 
 // Config is stored at ~/.config/aptify/config.json.
 type Config struct {
@@ -186,11 +186,13 @@ func existingLoginValid(client *http.Client, configPath, serverURL string) (bool
 func runLogin(args []string) {
 	fs := flag.NewFlagSet("login", flag.ExitOnError)
 	opts := registerCommon(fs)
+	var codeFlag string
+	fs.StringVar(&codeFlag, "code", "", "2FA authentication code or recovery code")
 	_ = fs.Parse(args)
 
 	serverURL := fs.Arg(0)
 	if serverURL == "" {
-		fmt.Fprintln(os.Stderr, "usage: aptify-cli login <server-url>")
+		fmt.Fprintln(os.Stderr, "usage: aptify-cli login <server-url> [--code <code>]")
 		os.Exit(1)
 	}
 	serverURL = normalizeServerURL(serverURL)
@@ -225,7 +227,11 @@ func runLogin(args []string) {
 		os.Exit(1)
 	}
 	client := &http.Client{Jar: jar}
-	body, ct, _ := jsonBody(map[string]string{"username": username, "password": password})
+	loginPayload := map[string]string{"username": username, "password": password}
+	if codeFlag != "" {
+		loginPayload["code"] = codeFlag
+	}
+	body, ct, _ := jsonBody(loginPayload)
 	resp, err := apiDoWithClient(client, "POST", serverURL+"/api/auth/login", "", body, ct, serverURL)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "login failed:", err)
@@ -236,7 +242,36 @@ func runLogin(args []string) {
 		fmt.Fprintf(os.Stderr, "login failed: %s\n", errBody(resp))
 		os.Exit(1)
 	}
-	_, _ = io.Copy(io.Discard, resp.Body)
+
+	var loginResp struct {
+		Status       string `json:"status"`
+		PreAuthToken string `json:"pre_auth_token"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&loginResp)
+
+	// If 2FA is required, challenge operator for code
+	if loginResp.Status == "2fa_required" {
+		code := codeFlag
+		if code == "" {
+			fmt.Print("2FA Code or Recovery Code: ")
+			_, _ = fmt.Scanln(&code)
+			code = strings.TrimSpace(code)
+		}
+		verifyBody, ctV, _ := jsonBody(map[string]string{
+			"pre_auth_token": loginResp.PreAuthToken,
+			"code":           code,
+		})
+		vResp, err := apiDoWithClient(client, "POST", serverURL+"/api/auth/2fa/verify", "", verifyBody, ctV, serverURL)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "2FA verification failed:", err)
+			os.Exit(1)
+		}
+		defer vResp.Body.Close()
+		if vResp.StatusCode != http.StatusOK {
+			fmt.Fprintf(os.Stderr, "2FA verification failed: %s\n", errBody(vResp))
+			os.Exit(1)
+		}
+	}
 
 	// 2. Create an API key using the cookie session.
 	hostname, _ := os.Hostname()

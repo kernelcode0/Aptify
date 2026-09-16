@@ -59,7 +59,12 @@ export default function Layout() {
 
   useEffect(() => setMenuOpen(false), [loc.pathname])
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await api.logout()
+    } catch {
+      // ignore
+    }
     setToken('')
     navigate('/login')
   }
