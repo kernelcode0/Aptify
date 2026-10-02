@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { api, type CurrentUser, type Role, type User } from '../api'
+import { useConfirm } from '../components/ConfirmDialog'
 import './Users.css'
 
 function PlusIcon() {
@@ -72,6 +73,7 @@ export default function Users() {
   const [editPassword, setEditPassword] = useState('')
   const [query, setQuery] = useState('')
   const [roleFilter, setRoleFilter] = useState<'all' | Role>('all')
+  const [confirmDialog, confirm] = useConfirm()
 
   const load = () => {
     api.listUsers()
@@ -126,7 +128,7 @@ export default function Users() {
   }
 
   const handleDelete = async (u: User) => {
-    if (!confirm(`Delete user "${u.username}"? This cannot be undone.`)) return
+    if (!(await confirm({ title: 'Delete user', message: `Delete user "${u.username}"? This cannot be undone.`, confirmLabel: 'Delete', danger: true }))) return
     setError('')
     try {
       await api.deleteUser(u.id)
@@ -137,7 +139,7 @@ export default function Users() {
   }
 
   const handleReset2FA = async (u: User) => {
-    if (!confirm(`Reset 2FA for "${u.username}"? They will be able to log in with their password alone.`)) return
+    if (!(await confirm({ title: 'Reset 2FA', message: `Reset 2FA for "${u.username}"? They will be able to log in with their password alone.`, confirmLabel: 'Reset 2FA' }))) return
     setError('')
     try {
       await api.resetUser2FA(u.id)
@@ -286,6 +288,7 @@ export default function Users() {
         </div>
         </section>
       )}
+      {confirmDialog}
     </div>
   )
 }

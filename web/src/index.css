@@ -332,6 +332,12 @@ tbody tr:hover td { background: rgba(45, 212, 191, 0.045); }
 }
 .modal-close:hover { color: var(--text); background: var(--surface2); }
 
+.confirm-modal { max-width: 380px; padding: 24px; }
+.confirm-modal h2 { font-size: 16px; font-weight: 750; margin-bottom: 10px; }
+.confirm-modal p { color: var(--muted); font-size: 13px; line-height: 1.55; margin-bottom: 20px; }
+.confirm-modal .form-actions { margin-top: 0; justify-content: flex-end; }
+.confirm-danger h2 { color: #fda4af; }
+
 @media (max-width: 720px) {
   body { font-size: 13px; }
   button { width: 100%; }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { api, type APIKey, type APIKeyCreated, type CurrentUser } from '../api'
+import { useConfirm } from '../components/ConfirmDialog'
 import './ApiKeys.css'
 
 function PlusIcon() {
@@ -63,6 +64,7 @@ export default function ApiKeys() {
   const [newKey, setNewKey] = useState<APIKeyCreated | null>(null)
   const [copied, setCopied] = useState(false)
   const [query, setQuery] = useState('')
+  const [confirmDialog, confirm] = useConfirm()
 
   if (user?.role === 'viewer') {
     return (
@@ -116,7 +118,7 @@ export default function ApiKeys() {
   }
 
   const handleDelete = async (key: APIKey) => {
-    if (!confirm(`Delete API key "${key.name}"? This cannot be undone.`)) return
+    if (!(await confirm({ title: 'Delete API key', message: `Delete API key "${key.name}"? Anything using it will stop authenticating. This cannot be undone.`, confirmLabel: 'Delete', danger: true }))) return
     try {
       await api.deleteAPIKey(key.id)
       setKeys(prev => prev.filter(k => k.id !== key.id))
@@ -277,6 +279,7 @@ export default function ApiKeys() {
         </div>
         </section>
       )}
+      {confirmDialog}
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, Link, useOutletContext } from 'react-router-dom'
 import { api, type CurrentUser, type Package, type Repo, type RepoStatus, type SetupInfo } from '../api'
+import { useConfirm } from '../components/ConfirmDialog'
 import './RepoDetail.css'
 
 type Tab = 'packages' | 'setup'
@@ -90,6 +91,7 @@ export default function RepoDetail() {
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [indexStatus, setIndexStatus] = useState<RepoStatus | null>(null)
+  const [confirmDialog, confirm] = useConfirm()
   const inputRef = useRef<HTMLInputElement>(null)
   const canManageRepo = user?.role === 'admin'
   const canManagePackages = user?.role === 'admin' || user?.role === 'member'
@@ -168,7 +170,7 @@ export default function RepoDetail() {
 
   const handleDelete = async (pkg: Package) => {
     if (!id) return
-    if (!confirm(`Remove ${pkg.package} ${pkg.version}?`)) return
+    if (!(await confirm({ title: 'Remove package', message: `Remove ${pkg.package} ${pkg.version}?`, confirmLabel: 'Remove', danger: true }))) return
     try {
       await api.deletePackage(id, pkg.id)
       setPackages(p => p.filter(x => x.id !== pkg.id))
@@ -181,7 +183,7 @@ export default function RepoDetail() {
 
   const handleDeleteRepo = async () => {
     if (!id || !repo) return
-    if (!confirm(`Permanently delete repository "${repo.name}"? This cannot be undone.`)) return
+    if (!(await confirm({ title: 'Delete repository', message: `Permanently delete repository "${repo.name}"? This cannot be undone.`, confirmLabel: 'Delete', danger: true }))) return
     try {
       await api.deleteRepo(id)
       navigate('/')
@@ -405,6 +407,7 @@ export default function RepoDetail() {
           <div className="spinner" />
         </div>
       )}
+      {confirmDialog}
     </div>
   )
 }
