@@ -41,6 +41,10 @@ func New(db *storage.DB, fs *storage.FileStore, gen *index.Generator, signer *si
 
 func (h *Handler) Router(spa http.Handler) http.Handler {
 	r := chi.NewRouter()
+	// Trust X-Forwarded-For/X-Real-IP from the reverse proxy (Pangolin/Traefik).
+	// The app port is only reachable via the proxy's docker network, so the
+	// headers can't be spoofed by outside clients.
+	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(SecurityHeaders)
