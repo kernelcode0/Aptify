@@ -190,7 +190,7 @@ export default function Users() {
               </div>
               <div className="field">
                 <label>Password</label>
-                <input type="password" value={newUser.password} onChange={e => setNewUser(f => ({ ...f, password: e.target.value }))} minLength={8} required />
+                <input type="password" autoComplete="new-password" value={newUser.password} onChange={e => setNewUser(f => ({ ...f, password: e.target.value }))} minLength={8} required />
               </div>
               <div className="field">
                 <label>Role</label>
@@ -218,7 +218,7 @@ export default function Users() {
           <div className="users-collection-header">
             <div><h2>Workspace users</h2><p>{visibleUsers.length === users.length ? `${users.length} account${users.length === 1 ? '' : 's'}` : `${visibleUsers.length} of ${users.length} accounts`}</p></div>
             <div className="users-toolbar">
-              <label className="user-search"><span className="search-symbol" aria-hidden="true" /><span className="sr-only">Search users</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search users…" /></label>
+              <label className="user-search"><span className="search-symbol" aria-hidden="true" /><span className="sr-only">Search users</span><input autoComplete="off" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search users…" /></label>
               <label><span className="sr-only">Filter by role</span><select value={roleFilter} onChange={e => setRoleFilter(e.target.value as 'all' | Role)}><option value="all">All roles</option><option value="admin">Administrators</option><option value="member">Members</option><option value="viewer">Viewers</option></select></label>
             </div>
           </div>
@@ -263,7 +263,7 @@ export default function Users() {
                     <td>
                       {editing === u.id ? (
                         <div className="user-edit-actions">
-                          <input type="password" placeholder="New password" value={editPassword} onChange={e => setEditPassword(e.target.value)} />
+                          <input type="password" placeholder="New password" autoComplete="new-password" value={editPassword} onChange={e => setEditPassword(e.target.value)} />
                           <button className="primary" onClick={() => saveEdit(u)}>Save</button>
                           <button className="ghost" onClick={() => setEditing(null)}>Cancel</button>
                         </div>

@@ -1,5 +1,5 @@
 # Stage 1: build React frontend
-FROM node:20-alpine AS frontend
+FROM node:24-alpine AS frontend
 WORKDIR /app/web
 COPY web/package*.json ./
 RUN npm ci

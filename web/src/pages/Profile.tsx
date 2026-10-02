@@ -373,6 +373,7 @@ export default function Profile() {
                 <label style={{ display: 'block', fontSize: '12px', marginBottom: '4px' }}>Your account password</label>
                 <input
                   type="password"
+                  autoComplete="current-password"
                   value={passwordInput}
                   onChange={e => setPasswordInput(e.target.value)}
                   placeholder="Enter your current password"
@@ -421,6 +422,7 @@ export default function Profile() {
                     <label style={{ display: 'block', fontSize: '12px', marginBottom: '4px' }}>Account password</label>
                     <input
                       type="password"
+                      autoComplete="current-password"
                       value={passwordInput}
                       onChange={e => setPasswordInput(e.target.value)}
                       placeholder="Enter password"
